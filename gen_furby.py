@@ -11,8 +11,8 @@ from parse_cfg import parse_cfg as pcfg
 P = pcfg("params.cfg")
 
 consts = {
-    'tfactor': int( P.tsamp / 1e-5 ),               #10 microseconds
-    'ffactor': int( ((P.ftop-P.fbottom)/P.nch)/0.1),      #We dont want dmsmear to be approximated beyond 100 kHz chw. So ffactor = chw/ 0.1
+    'tfactor': max([1, int( P.tsamp / 1e-5 )]),               #10 microseconds
+    'ffactor': max([1, int( ((P.ftop-P.fbottom)/P.nch)/0.1)]),      #We dont want dmsmear to be approximated beyond 100 kHz chw. So ffactor = chw/ 0.1
     }
 
 tmp = namedtuple("co", list(consts.keys()))
@@ -78,7 +78,7 @@ def get_pure_frb(snr, width, nch, nsamps):
     pure_frb_single_channel = gauss2(x, desired_signal, int(len(x)/2), width)
 
     if N.abs(N.sum(pure_frb_single_channel) - desired_signal) > desired_signal/50.:
-      raise RuntimeError("The generated signal is off by more than 2% of the desired value, desired_signal = {0}, generated_signal = {1}. Diff: {2}%".format(desired_signal, N.sum(pure_frb_single_channel), ((N.sum(pure_frb_single_channel) - desired_signal)/desired_signal * 100) ))
+      raise RuntimeError("The generated signal is off by more than 2% of the desired value, desired_signal = {0}, generated_signal = {1}. Diff: {2}% \nThis is often the case when requested width is << t_samp. Try increasing the width to >= tsamp and see if it works.".format(desired_signal, N.sum(pure_frb_single_channel), ((N.sum(pure_frb_single_channel) - desired_signal)/desired_signal * 100) ))
 
     pure_frb = N.array([pure_frb_single_channel] * nch)     #Copying single channel nch times as a 2D array
     
@@ -135,7 +135,7 @@ def create_freq_structure(frb, kind):
         z6 = nch
         f = -1 * (x-z1) * (x-z2) * (x-z3) * (x-z4) * (x-z5) * (x-z6)
     if kind == 'ASKAP':
-        n_blobs = N.floor(N.random.exponential(scale = 3, size=1)) + 1
+        n_blobs = int(N.floor(N.random.exponential(scale = 3, size=1))) + 1
         f = N.zeros(nch)
         for i in range(n_blobs):
             center_of_blob = N.random.uniform(0, nch, 1)
@@ -274,8 +274,8 @@ def start_logging(ctl, db_d):
       logger.write("#The following furbies were found to be present in the directory before the creation of this catalogue:\n")
       for furby in existing_furbies:
         logger.write("#"+furby+"\n")
-      logger.write("\n")
-      logger.write("#FURBY_ID\tDM\tFWHM\tTAU0\tSNR\tSIGNAL\n")
+    logger.write("\n")
+    logger.write("#FURBY_ID\tDM\tFWHM\tTAU0\tSNR\tSIGNAL\n")
   return logger
 
 def check_for_permissions(db_d):
@@ -338,7 +338,7 @@ def main(args):
       #widths = N.random.randint(args.width[0]*1e-3/P.tsamp,args.width[1]*1e-3/P.tsamp, args.Num)   #samples
       widths = N.random.uniform(args.width[0]*1e-3/P.tsamp,args.width[1]*1e-3/P.tsamp, args.Num)   #samples
     else:
-      raise IOError("Invalid input for Width")
+      raise IOError("Invalid input for Width - {0}".format(args.width))
     #width =3
     
     if isinstance(args.dm, float):
@@ -348,7 +348,7 @@ def main(args):
     elif isinstance(args.dm, list) and len(args.dm) ==2:
       dms = N.random.uniform(args.dm[0], args.dm[1], args.Num)
     else:
-      raise ioerror("invalid input for dm")
+      raise IOError("invalid input for dm - {0}".format(args.dm))
     #dm = 900
 
     
@@ -359,7 +359,7 @@ def main(args):
     elif isinstance(args.tau, list) and len(args.tau) ==2:
       tau0s = N.random.uniform(args.tau[0], args.tau[1], args.Num)
     else:
-      raise ioerror("invalid input for tau")
+      raise IOError("invalid input for tau - {0}".format(args.tau))
 
 
 # -----------------------------------------------------------------------------------------------------------------
@@ -405,7 +405,8 @@ def main(args):
         frb = get_pure_frb(snr=snr, width = width, nch=nch, nsamps=nsamps_for_gaussian)
       except RuntimeError as R:
         print(R)
-        continue
+        sys.exit(1)
+        #continue
       
       pure_signal = N.sum(frb.flatten())
       if args.v:
