@@ -12,7 +12,7 @@ P = pcfg("params.cfg")
 
 consts = {
     'tfactor': max([1, int( P.tsamp / 1e-5 )]),               #10 microseconds
-    'ffactor': max([1, int( ((P.ftop-P.fbottom)/P.nch)/0.1)]),      #We dont want dmsmear to be approximated beyond 100 kHz chw. So ffactor = chw/ 0.1
+    'ffactor': max([1, int( ((P.ftop-P.fbottom)/P.nch)/0.01)]),      #We dont want dmsmear to be approximated beyond 10 kHz chw. So ffactor = chw/ 0.01
     }
 
 tmp = namedtuple("co", list(consts.keys()))
@@ -135,13 +135,14 @@ def create_freq_structure(frb, kind):
         z6 = nch
         f = -1 * (x-z1) * (x-z2) * (x-z3) * (x-z4) * (x-z5) * (x-z6)
     if kind == 'ASKAP':
-        n_blobs = int(N.floor(N.random.exponential(scale = 3, size=1))) + 1
+        n_blobs = int(N.floor(N.random.exponential(scale = 5, size=1))) + 1
         f = N.zeros(nch)
         for i in range(n_blobs):
             center_of_blob = N.random.uniform(0, nch, 1)
-            #We want roughly 4 +- 1 MHz blobs. 4 MHz = 4/chw chans = 4./((P.ftop - P.bottom)/nch) chans
+            width_of_blob = N.abs(  N.random.normal(loc = 20 / n_blobs, scale = 5, size = 1)  )
+            #We want roughly 10 +- 5 MHz blobs. 10 MHz = 10/chw chans = 10./((P.ftop - P.bottom)/nch) chans
             NCHAN_PER_MHz = N.abs(1./( (P.ftop-P.fbottom)/nch ))
-            width_of_blob = N.random.normal(loc = 4.*NCHAN_PER_MHz, scale = NCHAN_PER_MHz, size = 1)  
+            width_of_blob = N.random.normal(loc = width_of_blob*NCHAN_PER_MHz, scale = NCHAN_PER_MHz, size = 1)  
             amp_of_blob = N.random.uniform(1, 3, 1)             #For just one blob (n_blobs=1), this does not matter because we rescale the maxima to 1 evetually. For more than one blobs, this random amp will set the relative power in different blobs. So, the power in weakest blob can be as low as 1/3rd of the strongest blob)
             f += gauss(x, amp_of_blob, center_of_blob, width_of_blob)
             
@@ -188,6 +189,8 @@ def disperse(frb, dm, pre_shift, dmsmear):
 
     for i in range(nch):
       delay = delays_in_samples[i]
+      if (end + delay > nsamps) or (start + delay < 0):
+        raise RuntimeError("nsamps (={0}) is too small to accomodate an FRB with DM = {1}".format(P.tot_nsamples, dm))
       mid_channel_coarse = int(i/ffactor) *ffactor + int(ffactor/2.0)
       dispersed_frb[i, start+delay: end+delay] += frb[int(i/ffactor)]
       undispersed_time_series += N.take(dispersed_frb[i], idxs + delays_in_samples[mid_channel_coarse], mode='wrap')
