@@ -1,5 +1,5 @@
 # Furby
-Mock FRB generator (requires python2.7)
+Mock FRB generator
 
 ### gen_furby.py
 
