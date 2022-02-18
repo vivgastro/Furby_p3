@@ -3,6 +3,9 @@ import os, sys
 
 
 def tscrunch(data, tx):
+    if type(data) != N.ndarray:
+        raise TypeError("Only numpy 1-D or 2-D arrays are accepted by tscrunch()")
+
     if tx == 1:
         return data
 
