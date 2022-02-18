@@ -3,5 +3,4 @@ params.yml
 *.pyc
 Furby_p3.egg-info
 *.swp
-furby_*
 
