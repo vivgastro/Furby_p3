@@ -1,3 +1,4 @@
+from multiprocessing.sharedctypes import Value
 import numpy as np
 import matplotlib.pyplot as plt
 from Furby_p3.Signal import Telescope, Pulse, SUPPORTED_FREQ_STRUCTURES
@@ -11,6 +12,17 @@ import argparse
 
 
 def start_logging(ctl, db_d, args):
+    '''
+    Creates the furbies.cat catalog file. Designed to log the name and
+    other properties of simulated FRBs in run-time.
+    
+    Opens/creates the `furbies.cat` file in the database directory.
+    Writes a list of all pre-existing furbies in the database directory
+    at the start of the catalog.
+    Writes the header for the new furby entries.
+    
+    Returns the file handler `logger` of the catalog file.
+    '''
     if os.path.exists(ctl):
         logger = open(ctl, 'a')
     else:
@@ -33,12 +45,41 @@ def start_logging(ctl, db_d, args):
 
 
 def read_params_file(pfile):
+    '''
+    Reads the telescope parameter yaml file
+    '''
     with open(pfile) as f:
         params = yaml.safe_load(f)
 
     return params
 
+def parse_spectrum_argument(spectrum):
+    '''
+    Parses the spectrum argument
+    '''
+    if type(spectrum) == np.ndarray:
+        spectrum_type = spectrum.copy()
 
+    elif type(spectrum) == str:
+        if os.path.exists(spectrum):
+            try:
+                spectrum_type = np.loadtxt(spectrum)
+            except Exception as E:
+                raise ValueError("The file provided as input for spectrum type failed to load with the following error: \n{0}".format(E))
+    
+        elif spectrum.lower() == "random":
+            spectrum_type = np.random.randint(
+                0, len(SUPPORTED_FREQ_STRUCTURES, 1)[0])
+        elif spectrum.lower() in SUPPORTED_FREQ_STRUCTURES:
+            spectrum_type = spectrum.lower()
+        else:
+            raise ValueError("Unknown spectrum requested: {0}",format(spectrum))
+    else:
+        raise ValueError(
+            "The requested spectrum type: {0} is unknown".format(spectrum))
+    return spectrum_type
+
+    
 def parse_cmd_line_params(args):
 
     # Parsing the cmd-line input parameters
@@ -69,15 +110,6 @@ def parse_cmd_line_params(args):
             "Invalid value of tot_nsamps specified: {0}".format(args.tot_nsamps))
 
     check_for_permissions(args.D)
-
-    if args.spectrum.lower() == "random":
-        spectrum_type = np.random.randint(
-            0, len(SUPPORTED_FREQ_STRUCTURES, 1)[0])
-    elif args.spectrum.lower() in SUPPORTED_FREQ_STRUCTURES:
-        spectrum_type = args.spectrum.lower()
-    else:
-        raise ValueError(
-            "The requested spectrum type: {0} is unknown".format(args.specrtrum))
 
     if isinstance(args.snr, float):
         snrs = args.snr * np.ones(args.Num)
@@ -117,7 +149,7 @@ def parse_cmd_line_params(args):
     else:
         raise ValueError("Invalid input for tau - {0}".format(args.tau))
 
-    return snrs, dms, widths, tau0s, spectrum_type
+    return snrs, dms, widths, tau0s
 
 
 def get_furby_ID(db_d):
@@ -134,10 +166,38 @@ def get_furby_ID(db_d):
 
     return ID, furby_name
 
+def get_furby(dm, snr, width, tau0, telescope_params, spectrum_type, 
+            noise_per_channel=1, tfactor=10, tot_nsamps=None, 
+            scattering_index = 4.4):
+
+    spectrum_type = parse_spectrum_argument(spectrum_type)
+
+    telescope = Telescope(telescope_params['ftop'],
+                          telescope_params['fbottom'],
+                          telescope_params['nch'],
+                          telescope_params['tsamp'],
+                          telescope_params['name'])
+    pulse = Pulse(telescope, noise_per_channel, tfactor, tot_nsamps, scattering_index)
+
+    frb_hires = pulse.get_pure_frb(snr, width)
+    frb_hires = pulse.create_freq_structure(frb_hires, spectrum_type)
+    frb_hires = pulse.scatter(frb_hires, tau0, snr)
+    frb_hires, undispersed_time_series_hires = pulse.disperse(
+        frb_hires, dm)
+
+    frb = tscrunch(frb_hires, tfactor)
+
+    undispersed_time_series = tscrunch(
+        undispersed_time_series_hires, tfactor)
+
+    final_frb = frb.astype('float32')
+
+    return final_frb, undispersed_time_series
+
 
 def main(args):
     P = read_params_file(args.params)
-    snrs, dms, widths, tau0s, spectrum_type = parse_cmd_line_params(args)
+    snrs, dms, widths, tau0s = parse_cmd_line_params(args)
 
     catalog_file = os.path.join(args.D, "furbies.cat")
     logger = start_logging(catalog_file, args.D, args)
@@ -154,29 +214,20 @@ def main(args):
         pulse = Pulse(telescope, args.noise_per_channel,
                       args.tfactor, args.tot_nsamps, args.scattering_index)
 
-        frb_hires = pulse.get_pure_frb(snr, width)
-        frb_hires = pulse.create_freq_structure(frb_hires, spectrum_type)
-        frb_hires = pulse.scatter(frb_hires, tau0, snr)
-        frb_hires, undispersed_time_series_hires = pulse.disperse(
-            frb_hires, dm)
-        FWHM = pulse.get_FWHM(undispersed_time_series_hires)
-        FWHM = FWHM * telescope.tsamp / args.tfactor
-
-        frb = tscrunch(frb_hires, args.tfactor)
-        undispersed_time_series = tscrunch(
-            undispersed_time_series_hires, args.tfactor)
+        final_frb, undispersed_time_series = get_furby(dm, snr, width, tau0, P, args.spectrum,
+            noise_per_channel=args.noise_per_channel, tfactor = args.tfactor, tot_nsamps=args.tot_nsamps,
+            scattering_index=args.scattering_index)
 
         matched_filter_snr = pulse.get_matched_filter_snr(
             undispersed_time_series)
         top_hat_width = np.sum(undispersed_time_series) / \
             np.max(undispersed_time_series) * telescope.tsamp
-
-        final_frb = frb.astype('float32')
+        FWHM = pulse.get_FWHM(undispersed_time_series)
+        FWHM = FWHM * telescope.tsamp
 
         hdr_string = make_psrdada_header(
-            telescope, args, ID, furby_name, 
-            matched_filter_snr, FWHM, top_hat_width, dm, tau0, spectrum_type
-        )
+        telescope, args, ID, furby_name, 
+        matched_filter_snr, FWHM, top_hat_width, dm, tau0)
 
         outfile = open(os.path.join(args.D, furby_name), 'wb')
         outfile.write(hdr_string.encode('ascii'))
@@ -212,7 +263,7 @@ if __name__ == "__main__":
     a.add_argument("-tau", nargs='+', type=float, help="Tau value or range endpoints\
         in ms (e.g. 0.2 or 0.1, 1). Specify 0 if you don't want scattering.", default=None)
     a.add_argument("-spectrum", type=str, help="Type of frequency structure in the spectrum\
-        to simulate. Options:[slope, smooth_envelope, Gaussian,\
+        to simulate. Options:[slope, smooth_envelope,\
              two_peaks, three_peaks, patchy, random]", default="patchy")
     a.add_argument("-D", type=str, help="Path to the database directory (existing or new).\
          Default=cwd", default="./")
