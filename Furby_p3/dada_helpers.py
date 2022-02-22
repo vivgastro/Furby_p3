@@ -68,7 +68,7 @@ def make_psrdada_header(telescope, nsamps, order, ID, furby_name, matched_filter
         "ID": ID,
         "SOURCE": furby_name,
         "FREQ": (telescope["ftop"] + telescope["fbottom"])/2.,
-        "BW":   telescope["ftop"] - telescope["fbottom"],
+        "BW":   -1 * (telescope["ftop"] - telescope["fbottom"]),
         "NPOL": 1,
         "NBIT": 32,
         "NCHAN": telescope["nch"],

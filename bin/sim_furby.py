@@ -90,8 +90,9 @@ def parse_spectrum_argument(spectrum):
                 raise ValueError("The file provided as input for spectrum type failed to load with the following error: \n{0}".format(E))
     
         elif spectrum.lower() == "random":
-            spectrum_type = np.random.randint(
-                0, len(SUPPORTED_FREQ_STRUCTURES, 1)[0])
+            randint = np.random.randint(
+                0, len(SUPPORTED_FREQ_STRUCTURES), 1)[0]
+            spectrum_type = SUPPORTED_FREQ_STRUCTURES[randint]
         elif spectrum.lower() in SUPPORTED_FREQ_STRUCTURES:
             spectrum_type = spectrum.lower()
         else:
@@ -124,9 +125,9 @@ def parse_cmd_line_params(args):
         raise ValueError(
             "Scattering Index has an insane value:{0}".format(args.scattering_index))
 
-    if args.noise_per_channel < 0:
-        raise ValueError("Noise_per_channel is invalid:{0}".format(
-            args.noise_per_channel))
+    if args.noise_per_sample < 0:
+        raise ValueError("Noise_per_sample is invalid:{0}".format(
+            args.noise_per_sample))
 
     if args.tfactor < 0:
         raise ValueError(
@@ -277,8 +278,7 @@ def get_furby(dm, snr, width, tau0, telescope_params, spectrum_type,
                           telescope_params['nch'],
                           telescope_params['tsamp'],
                           telescope_params['name'])
-    pulse = Pulse(telescope, tfactor,
-        tot_nsamps, scattering_index)
+    pulse = Pulse(telescope, tfactor, scattering_index, tot_nsamps)
 
     frb_hires = pulse.get_pure_frb(width)
     frb_hires = pulse.create_freq_structure(frb_hires, spectrum_type)
@@ -322,7 +322,7 @@ def main(args):
         ID, furby_name = get_furby_ID(args.D)
 
         final_frb, top_hat_width, FWHM, tot_nsamps = get_furby(dm, snr, width, tau0, P, args.spectrum,
-            noise_per_channel=args.noise_per_sample, tfactor = args.tfactor, tot_nsamps=args.tot_nsamps,
+            noise_per_sample=args.noise_per_sample, tfactor = args.tfactor, tot_nsamps=args.tot_nsamps,
             scattering_index=args.scattering_index)
 
         hdr_string = make_psrdada_header(
@@ -360,7 +360,7 @@ if __name__ == "__main__":
     a.add_argument("-snr", nargs='+', type=float, help="SNR value or SNR range endpoints\
          (e.g. 20 or 10, 50)", default=None)
     a.add_argument("-width", nargs='+', type=float, help="Width value or Width range endpoints\
-     in ms (e.g. 2 or 0.1, 10]", default=None)
+     in ms (e.g. 2 or 0.1, 10)", default=None)
     a.add_argument("-tau", nargs='+', type=float, help="Tau value or range endpoints\
         in ms (e.g. 0.2 or 0.1, 1). Specify 0 if you don't want scattering.", default=None)
     a.add_argument("-spectrum", type=str, help="Type of frequency structure in the spectrum\

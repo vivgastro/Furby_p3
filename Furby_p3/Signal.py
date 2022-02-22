@@ -255,14 +255,18 @@ class Pulse(object):
         '''
         f_ch = self.tel.f_ch
         tau0_samps = int(tau0/self.tel.tsamp) * self.tfactor
-        self._nsamps_for_exponential = int( 6 * tau0_samps * ((self.tel.ftop + self.tel.fbottom)/2 / self.tel.fbottom)**self.scattering_index )
+        nsamps = int( 6 * tau0_samps * ((self.tel.ftop + self.tel.fbottom)/2 / self.tel.fbottom)**self.scattering_index )
+        nsamps = max([1, nsamps])
+        self._nsamps_for_exponential = nsamps
 
-        nsamps = self._nsamps_for_exponential
+        if tau0_samps == 0:
+            return frb
 
         k = tau0_samps * (f_ch[0])**self.scattering_index  # proportionality constant
         taus = k / f_ch**self.scattering_index  # Calculating tau for each channel
         exps = []
         scattered_frb = []
+
         for i, t in enumerate(taus):
             # making the exponential with which to convolve each channel
             exps.append(N.exp(-1 * N.arange(nsamps) / t))
@@ -409,11 +413,10 @@ class Pulse(object):
             self._set_tot_nsamps(dm)
         nsamps = self.tot_nsamps * self.tfactor
         pre_shift = self._nsamps_for_gaussian
-        start = int(nsamps/2) - int(pre_shift*self.tfactor)
+        start = int(nsamps/2) - pre_shift
         #end = start + frb.shape[1]
-
-        dm_smear_max = self.dm_smear_delay(dm, chw, f_ch[-1], tres)
-        dm_smear_max_nsamps = frb[1].shape[0] + dm_smear_max -1
+        dm_smear_max = self.dm_smear_delay(dm, f_ch[-1], tres)
+        dm_smear_max_nsamps = frb[1].shape[0] + dm_smear_max
 
         end = start + dm_smear_max_nsamps
 
@@ -423,10 +426,8 @@ class Pulse(object):
         for i in range(nch):
             delay = delays_in_samples[i]
             if (end + delay > nsamps) or (start + delay < 0):
-                raise RuntimeError("nsamps (={0}) is too small to accomodate an FRB with DM = {1}".format(self.tot_nsamples, dm))
-            
+                raise RuntimeError("nsamps (={0}) is too small to accomodate an FRB with DM = {1}".format(self.tot_nsamps, dm))
             dmsmeared_channel = self.dm_smear_channel(frb[i], dm, cfreq = f_ch[i], tres=tres)
-
             padded_chan = pad_along_axis(dmsmeared_channel, dm_smear_max_nsamps, axis=0)
             dispersed_frb[i, start+delay : end+delay] += padded_chan
             undispersed_time_series += padded_chan
