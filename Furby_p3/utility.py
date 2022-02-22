@@ -152,3 +152,30 @@ def check_for_permissions(db_d):
             "Do not have permissions to write/create in the database directory: {0}".format(db_d))
         print("Exiting...")
         raise OSError("Do not have permissions to write/create files in the database directory")
+
+def get_matched_filter_snr(tseries, noise):
+    '''
+    Computes the matched filter snr for a given time series.
+    This method only works if we assume that noise is absolutely 
+    white and has no covariance.
+    The SNR is computed simply as the quadrature sum of the SNR of
+    individual samples
+
+    Parameters
+    ----------
+    tseries : numpy.ndarray
+        1-D numpy array containing the frequency averaged
+        time series data
+    noise : float
+        the std dev of the noise in the data onto which this 
+        time-series data would be added in future (by some other code)
+    Returns
+    -------
+    mf_snr : float
+        SNR calculated using the matched filter method
+    '''
+    #First, we have to normalise the time series such that the rms of the noise is 1
+    snr_individual_samples = tseries / noise
+    #Now the matched filter SNR is simply the quadrature sum of the SNRs of individual samples
+    mf_snr = N.sqrt(N.sum(snr_individual_samples**2))
+    return mf_snr

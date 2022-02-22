@@ -25,7 +25,7 @@ def make_psrdada_header_string(params):
     return header
 
 
-def make_psrdada_header(telescope, pulse, ID, furby_name, matched_filter_snr, FWHM, top_hat_width, dm, tau0):
+def make_psrdada_header(telescope, nsamps, order, ID, furby_name, matched_filter_snr, FWHM, top_hat_width, dm, tau0):
     '''
     Creates a header string that is compatible with the psrdada format
     
@@ -34,9 +34,8 @@ def make_psrdada_header(telescope, pulse, ID, furby_name, matched_filter_snr, FW
     
     Params
     ------
-    telescope : object
-        An instance of Telescope() class which contains the relevant
-        information about the furby's telescope
+    telescope : dict
+        A dict containing the telescope parameters
     pulse : object
         An instance of the Pulse() class which contains the relevant
         information about the simulated furby
@@ -65,22 +64,22 @@ def make_psrdada_header(telescope, pulse, ID, furby_name, matched_filter_snr, FW
     header_params = {
         "HDR_VERSION": 1.0,
         "HDR_SIZE": 16384,
-        "TELESCOPE": telescope.name,
+        "TELESCOPE": telescope["name"],
         "ID": ID,
         "SOURCE": furby_name,
-        "FREQ": (telescope.ftop + telescope.fbottom)/2.,
-        "BW":   telescope.bw,
+        "FREQ": (telescope["ftop"] + telescope["fbottom"])/2.,
+        "BW":   telescope["ftop"] - telescope["fbottom"],
         "NPOL": 1,
         "NBIT": 32,
-        "NCHAN": telescope.nch,
-        "TSAMP": telescope.tsamp * 1e-6,
-        "NSAMPS": pulse.tot_nsamps,
+        "NCHAN": telescope["nch"],
+        "TSAMP": telescope["tsamp"] * 1e-6,
+        "NSAMPS": nsamps,
         "UTC_START": "2022-01-01-00:00:00",
         "STATE": "Intensity",
         "OBS_OFFSET": 0,
-        "ORDER": pulse.order,
-        "FTOP": telescope.ftop,
-        "FBOTTOM": telescope.fbottom,
+        "ORDER": order,
+        "FTOP": telescope["ftop"],
+        "FBOTTOM": telescope["fbottom"],
         "INSTRUMENT": "FAKE",
         "SNR": matched_filter_snr,
         "FWHM": FWHM * 1e3,  # ms

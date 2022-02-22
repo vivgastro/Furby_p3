@@ -1,9 +1,8 @@
-from multiprocessing.sharedctypes import Value
 import numpy as np
 import matplotlib.pyplot as plt
 from Furby_p3.Signal import Telescope, Pulse, SUPPORTED_FREQ_STRUCTURES
-from Furby_p3.dada_helpers import make_psrdada_header, make_psrdada_header_string
-from Furby_p3.utility import check_for_permissions, tscrunch
+from Furby_p3.dada_helpers import make_psrdada_header
+from Furby_p3.utility import check_for_permissions, tscrunch, get_matched_filter_snr
 import os
 import time
 import glob
@@ -56,6 +55,29 @@ def read_params_file(pfile):
 def parse_spectrum_argument(spectrum):
     '''
     Parses the spectrum argument
+
+    Can accept a string for any of the supported spectrum types, or a 
+    1-D array containing the gain values for each channel, or a path 
+    to a file which contains the gain values for each channel.
+
+    Params
+    ------
+    spectrum : str or numpy.ndarray
+        The desired spectrum type. Supported values are [flat, slope, 
+        gaussian, pathcy, random]. Alternatively, you can provide
+        a 1-D numpy array or a path to the file on disk which contains
+        the gain values of each channel
+
+    Returns
+    -------
+    spectrum_type : str or numpy.ndarray
+        The parsed spectrum_type / gain values
+
+    Raises
+    ------
+    ValueError
+        If the spectrum type string is not supported, or if 
+        numpy.loadtxt fails on the provided file.
     '''
     if type(spectrum) == np.ndarray:
         spectrum_type = spectrum.copy()
@@ -81,6 +103,13 @@ def parse_spectrum_argument(spectrum):
 
     
 def parse_cmd_line_params(args):
+    '''
+    Parses the cmd line arguments
+
+    If a range is provided for any of the arguments, it selects
+    args.num values from a uniform random distribution in the specified
+    range.
+    '''
 
     # Parsing the cmd-line input parameters
     if args.Num < 1:
@@ -153,6 +182,22 @@ def parse_cmd_line_params(args):
 
 
 def get_furby_ID(db_d):
+    '''
+    Generates a furby_id randomly. Excludes those IDs which already
+    exist in the database.
+
+    Params
+    ------
+    db_d : str
+        Path to the database directory
+
+    Returns
+    -------
+    ID : str
+        Generated furby ID left padded with zeros
+    furby_name : str
+        Furby file name corresponding to the ID
+    '''
     max_ID = 100000
     while(True):
         ID = np.random.randint(0, max_ID, 1)[0]
@@ -167,8 +212,63 @@ def get_furby_ID(db_d):
     return ID, furby_name
 
 def get_furby(dm, snr, width, tau0, telescope_params, spectrum_type, 
-            noise_per_channel=1, tfactor=10, tot_nsamps=None, 
+            noise_per_sample=1, tfactor=10, tot_nsamps=None, 
             scattering_index = 4.4):
+    '''
+    Generates a noise-free mock FRB template based on the given params
+
+    Calls the relevant functions and creates a mock FRB template.
+
+    Params
+    ------
+    dm : float
+        DM value in pc/cc
+    snr : float 
+        SNR value
+    width : float
+        Width value in seconds
+    tau0 : float
+        The scattering timescale value in seconds
+    telescope_params : dict
+        A dictionary containing the properties of the telescope for
+        which the furby has to be simulated. Required properties
+        include - [ftop, fbottom, nch, tsamp, name]
+    spectrum_type : str or numpy.ndarray
+        The spectrum type that needs to be simulated
+        Can be any of the following:
+        1) a string from one of the supported spectrum types
+        2) a 1-D numpy array containing the gain values of channel
+        3) a path to a file containing the gain values of channel
+    noise_per_sample : float
+        rms of the noise along the time axis onto which this frb would
+        be added/injected. This is used to normalise the height of the
+        simulated furby such that when it is added to the real-time 
+        data, it attains the desired snr
+    tfactor : int
+        Oversampling factor. This is used to simulate the mock frb at 
+        a higher resolution than the tsamp, so that even for extremely
+        narrow furbies (~ 1 samp wide) the snr and width calculations
+        can be accurately carried out. 10 is a reasonable number to use
+    tot_nsamps : int
+        Total number of samples in the output furby block/template. If
+        None is provided, this value is automatically computed based on
+        the provided DM. Default is `None`
+    scattering_index : float
+        The power-law index of the scattering function which will be
+        used to scale the scattering timescale in each channel.
+        Default is `-4.4`
+
+    Returns
+    -------
+    final_frb : numpy.ndarray
+        A 2-D numpy array containing the time-freq data of the 
+        simulated noise-free mock frb template.
+    undispersed_time_series : numpy.ndarray
+        A 1-D numpy array containing the time-series data of the 
+        frequency averaged noise-free mock FRB after it has been
+        dm-smeared. This is useful for calculating the actual
+        snr and width of the simulated frb.
+    '''
 
     spectrum_type = parse_spectrum_argument(spectrum_type)
 
@@ -177,22 +277,33 @@ def get_furby(dm, snr, width, tau0, telescope_params, spectrum_type,
                           telescope_params['nch'],
                           telescope_params['tsamp'],
                           telescope_params['name'])
-    pulse = Pulse(telescope, noise_per_channel, tfactor, tot_nsamps, scattering_index)
+    pulse = Pulse(telescope, tfactor,
+        tot_nsamps, scattering_index)
 
-    frb_hires = pulse.get_pure_frb(snr, width)
+    frb_hires = pulse.get_pure_frb(width)
     frb_hires = pulse.create_freq_structure(frb_hires, spectrum_type)
-    frb_hires = pulse.scatter(frb_hires, tau0, snr)
+    frb_hires = pulse.scatter(frb_hires, tau0)
     frb_hires, undispersed_time_series_hires = pulse.disperse(
         frb_hires, dm)
 
-    frb = tscrunch(frb_hires, tfactor)
 
+    frb = tscrunch(frb_hires, tfactor)
     undispersed_time_series = tscrunch(
         undispersed_time_series_hires, tfactor)
+        
 
+    top_hat_width = np.sum(undispersed_time_series) / \
+        np.max(undispersed_time_series) * telescope.tsamp
+    FWHM = pulse.get_FWHM(undispersed_time_series) * telescope.tsamp
+
+    noise_after_averaging_channels = noise_per_sample * np.sqrt(telescope.nch)
+    mf_snr = get_matched_filter_snr(undispersed_time_series, noise_after_averaging_channels)
+    normalizing_factor = snr / mf_snr
+
+    frb *= normalizing_factor
     final_frb = frb.astype('float32')
 
-    return final_frb, undispersed_time_series
+    return final_frb, top_hat_width, FWHM, pulse.tot_nsamps
 
 
 def main(args):
@@ -210,35 +321,25 @@ def main(args):
 
         ID, furby_name = get_furby_ID(args.D)
 
-        telescope = Telescope(P["ftop"], P["fbottom"], P["nch"], P["tsamp"], P["name"])
-        pulse = Pulse(telescope, args.noise_per_channel,
-                      args.tfactor, args.tot_nsamps, args.scattering_index)
-
-        final_frb, undispersed_time_series = get_furby(dm, snr, width, tau0, P, args.spectrum,
-            noise_per_channel=args.noise_per_channel, tfactor = args.tfactor, tot_nsamps=args.tot_nsamps,
+        final_frb, top_hat_width, FWHM, tot_nsamps = get_furby(dm, snr, width, tau0, P, args.spectrum,
+            noise_per_channel=args.noise_per_sample, tfactor = args.tfactor, tot_nsamps=args.tot_nsamps,
             scattering_index=args.scattering_index)
 
-        matched_filter_snr = pulse.get_matched_filter_snr(
-            undispersed_time_series)
-        top_hat_width = np.sum(undispersed_time_series) / \
-            np.max(undispersed_time_series) * telescope.tsamp
-        FWHM = pulse.get_FWHM(undispersed_time_series)
-        FWHM = FWHM * telescope.tsamp
-
         hdr_string = make_psrdada_header(
-        telescope, args, ID, furby_name, 
-        matched_filter_snr, FWHM, top_hat_width, dm, tau0)
+        P, tot_nsamps, args.order, ID, furby_name, 
+        snr, FWHM, top_hat_width, dm, tau0)
 
         outfile = open(os.path.join(args.D, furby_name), 'wb')
         outfile.write(hdr_string.encode('ascii'))
 
         if args.order == "TF":
             O = 'F'  # column-major
-        if args.order == "FT":
+        elif args.order == "FT":
             O = 'c'  # row-major
 
         final_frb.flatten(order=O).tofile(outfile)
         outfile.close()
+
         logger.write(
             ID+"\t" +
             str(dm)+"\t" +
@@ -273,7 +374,7 @@ if __name__ == "__main__":
                    help="Scattering index. Def=-4.4", default=-4.4)
     a.add_argument("-tfactor", type=int, help="Oversampling factor in time to simulate\
         smooth FRBs at low widths. Def = 10", default=10)
-    a.add_argument("-noise_per_channel", type=float, help="Noise per channel in the real\
+    a.add_argument("-noise_per_sample", type=float, help="Noise per sample in the real\
         data this furby will be injected into. Def = 1.0", default=1.0)
     a.add_argument("-tot_nsamps", type=int,
                    help="Total no. of samps in the output block.Leave unspecified\

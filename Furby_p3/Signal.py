@@ -59,18 +59,12 @@ class Pulse(object):
     requested parameters.
     '''
 
-    def __init__(self, tel_obj, noise_per_channel, tfactor, scattering_index, tot_nsamps = None):
+    def __init__(self, tel_obj, tfactor, scattering_index, tot_nsamps = None):
         '''
         Parameters
         ----------
         tel_obj : object
             An instance of the Telescope() class
-        noise_per_channel : float
-            Expected noise in the real-data onto which this
-            simulated mock FRB will be injected. This is required
-            to be able to simulate the correct amplitude of the signal
-            such that when it is added to the data, it acheives the 
-            desired SNR.
         tfactor : float
             The oversampling factor in time. Allows for more accurate
             representation of the pulse with requested parameters,
@@ -86,7 +80,6 @@ class Pulse(object):
             it is automatically calculated based on the requested DM in
             the disperse() function.
             '''
-        self.noise_per_channel = noise_per_channel
         self.scattering_index = scattering_index
         self.tfactor = tfactor
         self.tel = tel_obj
@@ -98,14 +91,12 @@ class Pulse(object):
         self.tot_nsamps = int(int( (max_dm_sweep + buffer) / 100  + 1) * 100)        #Rounding up to the nearest 100 samps
 
 
-    def get_pure_frb(self, snr, width):
+    def get_pure_frb(self, width):
         '''
         Creates a simple Gaussian FRB profile with frequency and time axis
         
         Parameters
         ----------
-        snr : float
-            Signal-to-noise ratio expected
         width : float
             Width expected (in seconds)
 
@@ -120,24 +111,8 @@ class Pulse(object):
         self._nsamps_for_gaussian = int(max([1, 5 * width_samps]))
         x = N.arange(self._nsamps_for_gaussian)
 
-        clean_noise_rms = self.noise_per_channel 
-        # Dividing snr equally among all channels for the pure case
-        snr_per_channel = snr*1./N.sqrt(self.tel.nch)
-
-        # width is supposed to be FWHM
-        tmp_sigma = width_samps/2. / (2*N.log(2))**0.5
-        W_tophat_gauss_samps = N.sqrt(2*N.pi) * tmp_sigma
-
-        #TODO: Fix this calculation to use matched_filter_snr
-        desired_signal = snr_per_channel * \
-            clean_noise_rms * N.sqrt(W_tophat_gauss_samps)
-
         pure_frb_single_channel = gauss2(
-            x, desired_signal, int(len(x)/2), width_samps)
-
-        if N.abs(N.sum(pure_frb_single_channel) - desired_signal) > desired_signal/50.:
-            raise RuntimeError("The generated signal is off by more than 2% of the desired value, desired_signal = {0}, generated_signal = {1}. Diff: {2}% \nThis is often the case when requested width is << t_samp. Try increasing the width to >= tsamp and see if it works.".format(
-                desired_signal, N.sum(pure_frb_single_channel), ((N.sum(pure_frb_single_channel) - desired_signal)/desired_signal * 100)))
+            x, 1.0, int(len(x)/2), width_samps)
 
         # Copying single channel nch times as a 2D array
         pure_frb = N.array([pure_frb_single_channel] * self.tel.nch)
@@ -249,7 +224,7 @@ class Pulse(object):
         frb = frb * f.reshape(-1, 1)
         return frb
 
-    def scatter(self, frb, tau0, desired_snr):
+    def scatter(self, frb, tau0):
         '''
         Scatters the frb profile
 
@@ -271,7 +246,6 @@ class Pulse(object):
         tau0 : float
             The value of the decay timescale of the exponential kernel
             at the frequency of the highest channel.
-        desired_snr : To be deprecated
 
         Returns
         -------
@@ -299,11 +273,6 @@ class Pulse(object):
             scattered_frb.append(result)
 
         scattered_frb = N.array(scattered_frb)
-        scattered_tseries = scattered_frb.sum(axis=0)
-        scattered_width = scattered_tseries.sum() / N.max(scattered_tseries) / self.tfactor
-        new_snr = scattered_tseries.sum() / (N.sqrt(self.tel.nch) * self.noise_per_channel) /  N.sqrt(scattered_width)
-        normalizing_factor = new_snr / desired_snr
-        scattered_frb /= normalizing_factor
         return scattered_frb
 
     def dm_smear_delay(self, dm, cfreq, tres, chw=None):
@@ -391,31 +360,6 @@ class Pulse(object):
         hpp1, hpp2, maxx, FWHM)
         return FWHM
 
-    def get_matched_filter_snr(self, tseries):
-        '''
-        Computes the matched filter snr for a given time series.
-        This method only works if we assume that noise is absolutely 
-        white and has no covariance.
-        The SNR is computed simply as the quadrature sum of the SNR of
-        individual samples
-
-        Parameters
-        ----------
-        tseries : numpy.ndarray
-            1-D numpy array containing the frequency averaged
-            time series data
-
-        Returns
-        -------
-        snr : float
-            SNR calculated using the matched filter method
-        '''
-        #First, we have to normalise the time series such that the rms of the noise is 1
-        normalised_tseries = tseries / (self.tel.nch**0.5 * self.noise_per_channel)
-
-        #Now the matched filter SNR is simply the quadrature sum of the SNRs of individual samples
-        snr = N.sqrt(N.sum(normalised_tseries**2))
-        return snr
 
     def disperse(self, frb, dm):
         '''
