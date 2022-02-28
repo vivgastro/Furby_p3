@@ -1,5 +1,6 @@
 import numpy as N
 from Furby_p3.utility import gauss2, gauss, pad_along_axis
+from Furby_p3.Telescope import Telescope
 
 from scipy import signal
 SUPPORTED_FREQ_STRUCTURES = [
@@ -9,46 +10,6 @@ SUPPORTED_FREQ_STRUCTURES = [
     "power_law",
     "patchy"
 ]
-class Telescope(object):
-    '''
-    A class that encapsulates the properties of a telescope for which
-    mock FRBs have to be simulated.
-    '''
-
-    def __init__(self, ftop, fbottom, nch, tsamp, name):
-        '''
-        Params
-        ------
-        name : str
-            Name of the instrument
-        ftop : float
-            Frequency of the upper edge of highest channel (in MHz)
-        fbottom : float
-            Frequency of the lower edge of the lowest channel (in MHz)
-        nch : int
-            Number of frequency channels
-        tsamp : float
-            Sampling time of the instrument
-         '''
-        self.name = name
-        self.ftop = ftop
-        self.fbottom = fbottom
-        self.fcenter = (ftop + fbottom) /2
-        self.nch = nch
-        self.tsamp = tsamp
-        self._set_bw()
-
-    def _set_bw(self):
-        '''
-        Sets the total bandwidth (bw), channel bandwidth (chw)
-        and the center freq (f_ch) of each channel.
-        '''
-        self.bw = self.ftop - self.fbottom
-        self.chw = self.bw / self.nch
-        self.f_ch = N.linspace(self.ftop - self.chw/2,
-                               self.fbottom + self.chw/2, self.nch)
-
-
 
 class Pulse(object):
     '''
@@ -88,7 +49,7 @@ class Pulse(object):
 
     def _set_tot_nsamps(self, dm, buffer = 100):
         max_dm_sweep = self.dm_smear_delay(dm, self.tel.fcenter, self.tel.tsamp, chw=self.tel.bw)
-        self.tot_nsamps = int(int( (max_dm_sweep + buffer) / 100  + 1) * 100)        #Rounding up to the nearest 100 samps
+        self.tot_nsamps = int(int( (max_dm_sweep + 2*buffer) / 100  + 1) * 100)        #Rounding up to the nearest 100 samps
 
 
     def get_pure_frb(self, width):
@@ -108,7 +69,7 @@ class Pulse(object):
         '''
         width_samps = width / self.tel.tsamp
         width_samps = width_samps * self.tfactor
-        self._nsamps_for_gaussian = int(max([1, 5 * width_samps]))
+        self._nsamps_for_gaussian = 2*int(max([1, 5 * width_samps]))
         x = N.arange(self._nsamps_for_gaussian)
 
         pure_frb_single_channel = gauss2(
@@ -245,7 +206,7 @@ class Pulse(object):
             2-D numpy array containing the FRB time-freq profile
         tau0 : float
             The value of the decay timescale of the exponential kernel
-            at the frequency of the highest channel.
+            at the frequency of the highest channel in sec.
 
         Returns
         -------
@@ -354,6 +315,7 @@ class Pulse(object):
             The full-width at half maximum in sample units
         '''
         maxx = N.argmax(frb_tseries)
+        print(f"tseries = {frb_tseries}")
         hp = frb_tseries[maxx] / 2.
         # Finding the half-power points
         hpp1 = (N.abs(frb_tseries[:maxx] - hp)).argmin()
@@ -410,13 +372,15 @@ class Pulse(object):
         #nsamps = delays_in_samples[-1]*2 + 2*frb.shape[1]
         
         if self.tot_nsamps is None:
-            self._set_tot_nsamps(dm)
+            self._set_tot_nsamps(dm, buffer = self._nsamps_for_gaussian/self.tfactor)
         nsamps = self.tot_nsamps * self.tfactor
-        pre_shift = self._nsamps_for_gaussian
+        pre_shift = self._nsamps_for_gaussian // 2
         start = int(nsamps/2) - pre_shift
         #end = start + frb.shape[1]
         dm_smear_max = self.dm_smear_delay(dm, f_ch[-1], tres)
         dm_smear_max_nsamps = frb[1].shape[0] + dm_smear_max
+
+        print(f"frb.shape = {frb.shape}, dm_smear_max = {dm_smear_max}")
 
         end = start + dm_smear_max_nsamps
 
