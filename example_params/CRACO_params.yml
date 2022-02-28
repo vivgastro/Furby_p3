@@ -1,0 +1,5 @@
+name: FAKE
+nch: 256
+ftop: 991
+fbottom: 735
+tsamp: 0.001   #s
