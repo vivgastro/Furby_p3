@@ -315,7 +315,6 @@ class Pulse(object):
             The full-width at half maximum in sample units
         '''
         maxx = N.argmax(frb_tseries)
-        print(f"tseries = {frb_tseries}")
         hp = frb_tseries[maxx] / 2.
         # Finding the half-power points
         hpp1 = (N.abs(frb_tseries[:maxx] - hp)).argmin()
@@ -372,7 +371,7 @@ class Pulse(object):
         #nsamps = delays_in_samples[-1]*2 + 2*frb.shape[1]
         
         if self.tot_nsamps is None:
-            self._set_tot_nsamps(dm, buffer = self._nsamps_for_gaussian/self.tfactor)
+            self._set_tot_nsamps(dm, buffer = frb.shape[1]//self.tfactor)
         nsamps = self.tot_nsamps * self.tfactor
         pre_shift = self._nsamps_for_gaussian // 2
         start = int(nsamps/2) - pre_shift
@@ -390,7 +389,7 @@ class Pulse(object):
         for i in range(nch):
             delay = delays_in_samples[i]
             if (end + delay > nsamps) or (start + delay < 0):
-                raise RuntimeError("nsamps (={0}) is too small to accomodate an FRB with DM = {1}".format(self.tot_nsamps, dm))
+                raise RuntimeError("nsamps (={nsamps}) is too small to accomodate an FRB with DM = {dm}. Values: start = {start}, end={end}, delay={delay}".format(nsamps=self.tot_nsamps, dm=dm, start=start, end=end, delay=delay))
             dmsmeared_channel = self.dm_smear_channel(frb[i], dm, cfreq = f_ch[i], tres=tres)
             padded_chan = pad_along_axis(dmsmeared_channel, dm_smear_max_nsamps, axis=0)
             dispersed_frb[i, start+delay : end+delay] += padded_chan
