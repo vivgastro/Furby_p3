@@ -1,4 +1,4 @@
-matplotlib==3.5.1
-numpy==1.22.2
-PyYAML==6.0
-scipy==1.8.0
+matplotlib>=3.5.1
+numpy>=1.22.2
+PyYAML>=6.0
+scipy>=1.8.0
