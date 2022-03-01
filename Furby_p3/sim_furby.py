@@ -124,20 +124,15 @@ def get_furby(dm, snr, width, tau0, telescope_params, spectrum_type,
     pulse = Pulse(telescope, tfactor, scattering_index, tot_nsamps)
 
     frb_hires = pulse.get_pure_frb(width)
-    print(f"frb_hires.shape after pure_frb = {frb_hires.shape}")
     frb_hires = pulse.create_freq_structure(frb_hires, spectrum_type)
-    print(f"frb_hires.shape after freq_struc = {frb_hires.shape}")
     frb_hires = pulse.scatter(frb_hires, tau0)
-    print(f"frb_hires.shape after scatter = {frb_hires.shape}")
     frb_hires, undispersed_time_series_hires = pulse.disperse(
         frb_hires, dm)
-    print(f"frb_hires.shape after disperse = {frb_hires.shape}")
 
-    print(f"Hires Undispersed_time_series = {undispersed_time_series_hires.shape}")
     frb = tscrunch(frb_hires, tfactor)
     undispersed_time_series = tscrunch(
         undispersed_time_series_hires, tfactor)
-    print(f"Undispersed_time_series = {undispersed_time_series}")
+
         
 
     top_hat_width = np.sum(undispersed_time_series_hires) / \
