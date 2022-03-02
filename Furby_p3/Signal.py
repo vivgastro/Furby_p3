@@ -69,7 +69,7 @@ class Pulse(object):
         '''
         width_samps = width / self.tel.tsamp
         width_samps = width_samps * self.tfactor
-        self._nsamps_for_gaussian = 2*int(max([1, 5 * width_samps]))
+        self._nsamps_for_gaussian = 2*int(max([self.tfactor, 5 * width_samps]))
         x = N.arange(self._nsamps_for_gaussian)
 
         pure_frb_single_channel = gauss2(
