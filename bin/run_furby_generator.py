@@ -182,7 +182,7 @@ def main(args):
 
         hdr_string = make_psrdada_header(
         P, tot_nsamps, args.order, ID, furby_name, 
-        snr, FWHM, top_hat_width, dm, tau0)
+        snr, FWHM, top_hat_width, dm, tau0, args.noise_per_sample)
 
         outfile = open(os.path.join(args.D, furby_name), 'wb')
         outfile.write(hdr_string.encode('ascii'))

@@ -25,7 +25,7 @@ def make_psrdada_header_string(params):
     return header
 
 
-def make_psrdada_header(telescope, nsamps, order, ID, furby_name, matched_filter_snr, FWHM, top_hat_width, dm, tau0):
+def make_psrdada_header(telescope, nsamps, order, ID, furby_name, matched_filter_snr, FWHM, top_hat_width, dm, tau0, noise_per_sample):
     '''
     Creates a header string that is compatible with the psrdada format
     
@@ -53,6 +53,8 @@ def make_psrdada_header(telescope, nsamps, order, ID, furby_name, matched_filter
         DM of the furby (in pc/cc)
     tau0 : float
         Scattering timescale tau0 of the furby (in seconds)
+    noise_per_sample : float
+        Noise_per_sample of the data onto which this furby would be added
 
     Returns
     -------
@@ -72,7 +74,7 @@ def make_psrdada_header(telescope, nsamps, order, ID, furby_name, matched_filter
         "NPOL": 1,
         "NBIT": 32,
         "NCHAN": telescope["nch"],
-        "TSAMP": telescope["tsamp"] * 1e-6,
+        "TSAMP": telescope["tsamp"] * 1e6,      #DADA header has tsamp in micro-seconds
         "NSAMPS": nsamps,
         "UTC_START": "2022-01-01-00:00:00",
         "STATE": "Intensity",
@@ -86,6 +88,7 @@ def make_psrdada_header(telescope, nsamps, order, ID, furby_name, matched_filter
         "WIDTH": top_hat_width * 1e3,  # ms
         "DM": dm,
         "TAU0": tau0 * 1e3,  # ms
+        "NOISE_PER_SAMPLE" : noise_per_sample
     }
     hdr_string = make_psrdada_header_string(header_params)
     return hdr_string

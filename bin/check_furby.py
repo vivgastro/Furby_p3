@@ -9,49 +9,7 @@ import sys
 
 from Furby_p3.Furby_reader import Furby_reader as F
 from Furby_p3.Furby_reader import Furby_Error
-
-def tscrunch(fsdata, tx, avg=False):
-    if tx==1:
-        return fsdata
-
-    if len(fsdata.shape)==1:
-      endp = int(fsdata.shape[0]/tx) * tx
-      tfsdata = fsdata[:endp].reshape(-1, tx).sum(axis=-1)
-
-    elif len(fsdata.shape)==2:
-        nr=fsdata.shape[0]
-        nc=fsdata.shape[1]
-
-        endpoint=int(nc/tx) * tx
-
-        tmp=fsdata[:,:endpoint].reshape(nr, int(nc/tx), tx)  #P.S.: We lose a few time samples in the end if the tx factor does not exactly divide the initial number of time samples in the filterbank file
-        tfsdata=tmp.sum(axis=-1)
-    else:
-      raise ValueError
-
-    if avg==True:
-      tfsdata /= (1.*tx)
-    return tfsdata
-
-def fscrunch(data, fx, avg=False):
-    if fx==1:
-        return data
-
-    if len(data.shape)!=2:
-      raise ValueError("Only 2D arrays with frq along axis=0 can be fscrunched")
-    if data.shape[0]%fx!= 0:
-        print("!!!No of freq channels must be an integer multiple of the Freq scrunch factor!!!")
-        sys.exit(1)
-
-    fsdata=N.zeros((data.shape[0]/fx, data.shape[1]))
-
-    for i in range(data.shape[0]):
-        fsdata[i/fx] += data[i]
-    
-    if avg==True:
-        fsdata/=fx
-    return fsdata
-
+from Furby_p3.utility import tscrunch, fscrunch, get_matched_filter_snr
 
 def main(args):
     print("Plotting {0} furby(s)".format(len(args.furbies)))
@@ -79,6 +37,20 @@ def main(args):
         
         tseries=tfsdata.sum(axis=0)*1.0
         fseries = tfsdata.sum(axis=1)*1.0
+
+        if args.print_header:
+            print("The header of the furby is:\n{0}\n".format(f.header))
+        
+
+        if not args.dedisp:
+            dedisp_furby = f.dedisperse(data, dm = f.header.DM)
+            dedisp_tseries = dedisp_furby.sum(axis=0)*1.0
+        else:
+            dedisp_tseries = tseries
+
+        mf_snr = get_matched_filter_snr(dedisp_tseries, f.header.NOISE_PER_SAMPLE * N.sqrt(f.header.NCHAN))
+        print("The matched filter snr is: {0}".format(mf_snr))
+
 
         toff=0.5*tres*args.t_sc
         x=N.arange(0,len(tseries))*tres*args.t_sc + toff
@@ -141,6 +113,7 @@ if __name__=="__main__":
     a.add_argument("-dd", "--dedisp", action='store_true', help="Dedisperse the furby? (def=False)", default=False)
     a.add_argument("-fs","--freq_sc", type=int, help="Freq scrunch factor (def=1)", default=1)
     a.add_argument("-ts","--t_sc", type=int, help="Time scrunch factor (def=1)", default=1)
+    a.add_argument("-ph", "--print-header", action='store_true', help="Print out the header information (def = False)", default=False)
 
     a.add_argument("-pngs", action='store_true', help="Save pngs instead of plotting")
     args=a.parse_args()
