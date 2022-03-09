@@ -1,6 +1,6 @@
 import numpy as N
-import os
-
+import os, sys
+from scipy import signal
 
 def tscrunch(data, tx, avg = False):
     '''
@@ -243,4 +243,85 @@ def get_matched_filter_snr(tseries, tseries_noise):
     #Now the matched filter SNR is simply the quadrature sum of the SNRs of individual samples
     mf_snr = N.sqrt(N.sum(snr_individual_samples**2))
     return mf_snr
+
+def get_boxcar_width_and_snr(frb_tseries, tseries_noise):
+    '''
+    Computes the box-car width that gives the best SNR
+    
+    Params
+    ------
+    frb_tseries : numpy.ndarray
+        1-D numpy array containing the signal
+    tseries_noise : float
+        the std dev of the noise in the tseries of the data (after
+        summing across all other axes)
+    
+    Returns
+    -------
+    best_boxcar : int
+        The boxcar width (in samples) which gives the highest snr
+    best_boxcar_snr : float
+        The boxcar snr computed at the best boxcar width
+    
+    Raises
+    ------
+    ValueError:
+        If the time series is flat, i.e. there is no signal in the 
+        provided tseries
+    '''
+
+    if N.all(frb_tseries[0] == frb_tseries):
+        raise ValueError("The provided tseries does not have any\
+        signal")
+    if N.min(frb_tseries < 0):
+        raise ValueError("The baseline is negative!")
+
+    n_samps_above_zero = len(frb_tseries[frb_tseries > 0])
+    min_boxcar = 1
+    max_boxcar = n_samps_above_zero 
+    maxima = []
+    for boxcar in range(min_boxcar, max_boxcar + 1, 1):
+        convolved_tseries = signal.fftconvolve(frb_tseries, N.ones(boxcar), mode='valid') / N.sqrt(boxcar)
+        maxima.append( convolved_tseries.max() )
+    best_boxcar_idx = N.argmax(maxima)
+    best_boxcar_snr = maxima[best_boxcar_idx] / tseries_noise
+    return best_boxcar_idx + min_boxcar, best_boxcar_snr
+
+
+
+def get_FWHM(frb_tseries):
+    '''
+    Computes the FWHM of a pulse
+    Only works if there is a single peak. Will fail if the signal
+    contains more than one peaks.
+    Parameters
+    ----------
+    frb_tseries : numpy.ndarray
+        1-D numpy array containing the signal
+    Returns
+    -------
+    FWHM : float
+        The full-width at half maximum in sample units
+    
+    Raises
+    ------
+    ValueError:
+
+    '''
+    if N.all(frb_tseries[0] == frb_tseries):
+        raise ValueError("The tseries is flat, cannot calculate FWHM")
+    
+    if N.min(frb_tseries < 0):
+        raise ValueError("The baseline is negative!")
+
+    maxx = N.argmax(frb_tseries)
+    delta = N.min(frb_tseries[frb_tseries>frb_tseries.min()]) / 1e3
+    hp = frb_tseries[maxx] / 2.
+    # Finding the half-power points
+    hpp1 = (N.abs(frb_tseries[:maxx+1] - (hp + delta))).argmin()
+    hpp2 = (N.abs(frb_tseries[maxx:] - (hp - delta))).argmin() + maxx
+    FWHM = hpp2-hpp1
+    assert FWHM > 0, "FWHM calculation went wrong somewhere. HPP points, maxx point and FWHM are {0} {1} {2} {3}".format(
+    hpp1, hpp2, maxx, FWHM)
+    return FWHM
 

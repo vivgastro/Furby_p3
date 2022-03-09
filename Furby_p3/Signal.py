@@ -1,3 +1,4 @@
+from multiprocessing.sharedctypes import Value
 import numpy as N
 from Furby_p3.utility import gauss2, gauss, pad_along_axis
 from Furby_p3.Telescope import Telescope
@@ -217,7 +218,7 @@ class Pulse(object):
         f_ch = self.tel.f_ch
         tau0_samps = int(tau0/self.tel.tsamp) * self.tfactor
         nsamps = int( 6 * tau0_samps * ((self.tel.ftop + self.tel.fbottom)/2 / self.tel.fbottom)**self.scattering_index )
-        nsamps = max([1, nsamps])
+        nsamps = max([self.tfactor, nsamps])
         self._nsamps_for_exponential = nsamps
 
         if tau0_samps == 0:
@@ -297,33 +298,6 @@ class Pulse(object):
 
         dmsmeared_data = signal.fftconvolve(d_ch, dms_kernel, mode='full')
         return dmsmeared_data / dms_width_samps
-
-    def get_FWHM(self, frb_tseries):
-        '''
-        Computes the FWHM of a pulse
-        Only works if there is a single peak. Will fail if the signal
-        contains more than one peaks.
-
-        Parameters
-        ----------
-        frb_tseries : numpy.ndarray
-            1-D numpy array containing the signal
-        
-        Returns
-        -------
-        FWHM : float
-            The full-width at half maximum in sample units
-        '''
-        maxx = N.argmax(frb_tseries)
-        hp = frb_tseries[maxx] / 2.
-        # Finding the half-power points
-        hpp1 = (N.abs(frb_tseries[:maxx] - hp)).argmin()
-        hpp2 = (N.abs(frb_tseries[maxx:] - hp)).argmin() + maxx
-
-        FWHM = hpp2-hpp1
-        assert FWHM > 0, "FWHM calculation went wrong somewhere. HPP points, maxx point and FWHM are {0} {1} {2} {3}".format(
-        hpp1, hpp2, maxx, FWHM)
-        return FWHM
 
 
     def disperse(self, frb, dm):

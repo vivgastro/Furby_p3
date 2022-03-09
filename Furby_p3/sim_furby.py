@@ -1,7 +1,7 @@
 import numpy as np
 from Furby_p3.Signal import Pulse, SUPPORTED_FREQ_STRUCTURES
 from Furby_p3.Telescope import Telescope
-from Furby_p3.utility import tscrunch, get_matched_filter_snr
+from Furby_p3.utility import tscrunch, get_matched_filter_snr, get_boxcar_width_and_snr, get_FWHM
 import os
 
 def parse_spectrum_argument(spectrum):
@@ -133,11 +133,10 @@ def get_furby(dm, snr, width, tau0, telescope_params, spectrum_type,
     undispersed_time_series = tscrunch(
         undispersed_time_series_hires, tfactor)
 
-        
-
     top_hat_width = np.sum(undispersed_time_series_hires) / \
         np.max(undispersed_time_series) * telescope.tsamp / tfactor
-    FWHM = pulse.get_FWHM(undispersed_time_series_hires) * telescope.tsamp / tfactor
+    FWHM = get_FWHM(undispersed_time_series_hires) * telescope.tsamp / tfactor
+    boxcar_width, boxcar_snr = get_boxcar_width_and_snr(undispersed_time_series_hires, noise_per_sample)
 
     noise_after_averaging_channels = noise_per_sample * np.sqrt(telescope.nch)
     mf_snr = get_matched_filter_snr(undispersed_time_series, noise_after_averaging_channels)
