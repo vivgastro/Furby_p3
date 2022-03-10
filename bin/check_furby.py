@@ -21,14 +21,13 @@ def main(args):
             print(fe.message)
             continue
           
-        tres=f.header.TSAMP/1e6		#dada format requires tsamp to be in usec
-        print("Filename: {0}\nID:{1}, SNR:{2}, DM:{3}, Width(top hat):{4} ms, Width(FWHM):{5} ms".format(f.filename, f.header.ID, f.header.SNR, f.header.DM, f.header.WIDTH, f.header.FWHM))
+        tres=f.header.TSAMP_US/1e6		#dada format requires tsamp to be in usec
 
         data=f.read_data()
         dm = 0
         if args.dedisp:
             ddata=f.read_data(dd=True)
-            dm = f.header.DM
+            dm = f.header.DM_PC_CC
         else:
             ddata=data
 
@@ -43,23 +42,23 @@ def main(args):
         
 
         if not args.dedisp:
-            dedisp_furby = f.dedisperse(data, dm = f.header.DM)
+            dedisp_furby = f.dedisperse(data, dm = f.header.DM_PC_CC)
             dedisp_tseries = dedisp_furby.sum(axis=0)*1.0
         else:
             dedisp_tseries = tseries
 
         mf_snr = get_matched_filter_snr(dedisp_tseries, f.header.NOISE_PER_SAMPLE * N.sqrt(f.header.NCHAN))
-        print("The matched filter snr is: {0}".format(mf_snr))
+        #print("The matched filter snr is: {0}".format(mf_snr))
 
 
         toff=0.5*tres*args.t_sc
         x=N.arange(0,len(tseries))*tres*args.t_sc + toff
         
-        f0 = f.header.FBOTTOM
-        fn = f.header.FTOP
-        chw = f.header.BW/f.header.NCHAN
+        f0 = f.header.FBOTTOM_MHZ
+        fn = f.header.FTOP_MHZ
+        chw = f.header.BW_MHZ/f.header.NCHAN
         
-        if f.header.BW<0:
+        if f.header.BW_MHZ<0:
           (f0, fn) = (fn, f0)
           
         fa = f0 + chw/2*args.freq_sc

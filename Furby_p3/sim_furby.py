@@ -55,8 +55,8 @@ def parse_spectrum_argument(spectrum):
     return spectrum_type
 
 
-def get_furby(dm, snr, width, tau0, telescope_params, spectrum_type, 
-            noise_per_sample=1, tfactor=10, tot_nsamps=None, 
+def get_furby(dm, snr, width, tau0, telescope_params, spectrum_type, shape='gaussian',
+            subsample_phase = 0.5, noise_per_sample=1, tfactor=10, tot_nsamps=None, 
             scattering_index = 4.4):
     '''
     Generates a noise-free mock FRB template based on the given params
@@ -83,6 +83,11 @@ def get_furby(dm, snr, width, tau0, telescope_params, spectrum_type,
         1) a string from one of the supported spectrum types
         2) a 1-D numpy array containing the gain values of channel
         3) a path to a file containing the gain values of channel
+    shape : str 
+        The shape of the intrinsic pulse profile
+        Options - ['gaussian', 'tophat'], def='gaussian'
+    subsample_phase : float
+        Subsample offset for the pulse (between 0 and 1). Def =0.5
     noise_per_sample : float, optional
         rms of the noise along the time axis onto which this frb would
         be added/injected. This is used to normalise the height of the
@@ -107,11 +112,9 @@ def get_furby(dm, snr, width, tau0, telescope_params, spectrum_type,
     final_frb : numpy.ndarray
         A 2-D numpy array containing the time-freq data of the 
         simulated noise-free mock frb template.
-    undispersed_time_series : numpy.ndarray
-        A 1-D numpy array containing the time-series data of the 
-        frequency averaged noise-free mock FRB after it has been
-        dm-smeared. This is useful for calculating the actual
-        snr and width of the simulated frb.
+    frb_header : dict
+        A dictionary containing all the header params relevant to the
+        simulated mock FRB.
     '''
 
     spectrum_type = parse_spectrum_argument(spectrum_type)
@@ -120,12 +123,12 @@ def get_furby(dm, snr, width, tau0, telescope_params, spectrum_type,
                           telescope_params['fbottom'],
                           telescope_params['nch'],
                           telescope_params['tsamp'],
-                          telescope_params['name'])
-    pulse = Pulse(telescope, tfactor, scattering_index, tot_nsamps)
+                          telescope_params['name'].upper())
+    pulse = Pulse(telescope, tfactor, tot_nsamps, subsample_phase)
 
-    frb_hires = pulse.get_pure_frb(width)
+    frb_hires = pulse.get_pure_frb(width, shape)
     frb_hires = pulse.create_freq_structure(frb_hires, spectrum_type)
-    frb_hires = pulse.scatter(frb_hires, tau0)
+    frb_hires = pulse.scatter(frb_hires, tau0, scattering_index)
     frb_hires, undispersed_time_series_hires = pulse.disperse(
         frb_hires, dm)
 
@@ -134,16 +137,48 @@ def get_furby(dm, snr, width, tau0, telescope_params, spectrum_type,
         undispersed_time_series_hires, tfactor)
 
     top_hat_width = np.sum(undispersed_time_series_hires) / \
-        np.max(undispersed_time_series) * telescope.tsamp / tfactor
+        np.max(undispersed_time_series_hires) * telescope.tsamp / tfactor
     FWHM = get_FWHM(undispersed_time_series_hires) * telescope.tsamp / tfactor
-    boxcar_width, boxcar_snr = get_boxcar_width_and_snr(undispersed_time_series_hires, noise_per_sample)
+
+    top_hat_width = max([telescope.tsamp, top_hat_width])
+    FWHM = max([telescope.tsamp, FWHM])
 
     noise_after_averaging_channels = noise_per_sample * np.sqrt(telescope.nch)
-    mf_snr = get_matched_filter_snr(undispersed_time_series, noise_after_averaging_channels)
-    normalizing_factor = snr / mf_snr
+    boxcar_width, boxcar_snr = get_boxcar_width_and_snr(undispersed_time_series, noise_after_averaging_channels)
 
+    normalizing_factor = snr / boxcar_snr
     frb *= normalizing_factor
     final_frb = frb.astype('float32')
 
-    return final_frb, top_hat_width, FWHM, pulse.tot_nsamps
+    mf_snr = get_matched_filter_snr(undispersed_time_series * normalizing_factor, noise_after_averaging_channels)
+    final_boxcar_width, final_boxcar_snr = get_boxcar_width_and_snr(undispersed_time_series * normalizing_factor, noise_after_averaging_channels)
+
+    frb_header_params = {
+        'DM_PC_CC' : dm,
+        'INTRINSIC_PULSE_SHAPE' : shape,
+        'SNR' : snr,
+        'WIDTH_MS' : width * 1e3,     #ms
+        'TAU0_MS' : tau0 * 1e3,       #ms
+        'MF_SNR' : mf_snr,
+        'BOXCAR_SNR' : final_boxcar_snr,
+        'BOXCAR_WIDTH_SAMPS' : final_boxcar_width,   #samps
+        'TOP_HAT_WIDTH_MS' : top_hat_width * 1e3, #ms
+        'FWHM_MS' : FWHM * 1e3,       #ms
+        'SCATTERING_INDEX' : scattering_index,
+        'SUBSAMPLE_PHASE' : pulse.subsample_phase,
+        'NOISE_PER_SAMPLE' : noise_per_sample,
+        'TELESCOPE' : telescope.name,
+        'FREQ_MHZ' : (telescope.ftop + telescope.fbottom) / 2,
+        'BW_MHZ' : -1 * (telescope.ftop - telescope.fbottom),
+        'NPOL' : 1,
+        'NBIT' : 32,
+        'NCHAN' : telescope.nch,
+        'TSAMP_US' : telescope.tsamp * 1e6,    
+        'NSAMPS' : pulse.tot_nsamps,
+        'FTOP_MHZ' : telescope.ftop,
+        'FBOTTOM_MHZ' : telescope.fbottom,
+    
+    }
+
+    return final_frb, frb_header_params
 

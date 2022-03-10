@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(name = 'Furby_p3',
-    version = '1.0',
+    version = '2.0.0',
     packages = ['Furby_p3',
                 'Furby_p3.tests'],
     scripts = ['bin/check_furby.py', 'bin/run_furby_generator.py'],

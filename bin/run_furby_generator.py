@@ -8,7 +8,6 @@ import glob
 import yaml
 import argparse
 
-
 def start_logging(ctl, db_d, args):
     '''
     Creates the furbies.cat catalog file. Designed to log the name and
@@ -153,7 +152,7 @@ def get_furby_ID(db_d):
         ID = str(ID).zfill(int(np.log10(max_ID)))
         furby_name = "furby_"+ID
 
-        if os.path.exists(os.path.join(args.D, furby_name)):
+        if os.path.exists(os.path.join(db_d, furby_name)):
             continue
         else:
             break
@@ -176,13 +175,15 @@ def main(args):
 
         ID, furby_name = get_furby_ID(args.D)
 
-        final_frb, top_hat_width, FWHM, tot_nsamps = get_furby(dm, snr, width, tau0, P, args.spectrum,
-            noise_per_sample=args.noise_per_sample, tfactor = args.tfactor, tot_nsamps=args.tot_nsamps,
+        final_frb, furby_header = get_furby(dm, snr, width, tau0,
+            telescope_params = P,
+            spectrum_type=args.spectrum, shape=args.shape, 
+            subsample_phase=args.subsample_phase,
+            noise_per_sample=args.noise_per_sample,
+            tfactor = args.tfactor, tot_nsamps=args.tot_nsamps,
             scattering_index=args.scattering_index)
 
-        hdr_string = make_psrdada_header(
-        P, tot_nsamps, args.order, ID, furby_name, 
-        snr, FWHM, top_hat_width, dm, tau0, args.noise_per_sample)
+        hdr_string = make_psrdada_header(furby_header, args.order, ID, furby_name)
 
         outfile = open(os.path.join(args.D, furby_name), 'wb')
         outfile.write(hdr_string.encode('ascii'))
@@ -197,10 +198,10 @@ def main(args):
 
         logger.write(
             ID+"\t" +
-            str(dm)+"\t" +
-            str(FWHM*1e3) + "\t" +
-            str(tau0*1e3) + "\t" +
-            str(snr) + "\n"
+            str(furby_header["DM_PC_CC"])+"\t" +
+            str(furby_header["FWHM_MS"]) + "\t" +
+            str(furby_header["TAU0_MS"]) + "\t" +
+            str(furby_header["SNR"]) + "\n"
         )
     logger.close()
 
@@ -221,6 +222,10 @@ if __name__ == "__main__":
     a.add_argument("-spectrum", type=str, help="Type of frequency structure in the spectrum\
         to simulate. Options:[slope, smooth_envelope,\
              two_peaks, three_peaks, patchy, random]", default="patchy")
+    a.add_argument("-shape", type=str, help="Desired shape of the intrinsic pulse profile.\
+        Options - ['gaussian', 'tophat']. Def = 'gaussian'", default='gaussian')
+    a.add_argument("-subsample_phase", type=float, help="Phase of the pulse within a sample\
+        Def = 0.5.", default=0.5)
     a.add_argument("-D", type=str, help="Path to the database directory (existing or new).\
          Default=cwd", default="./")
     a.add_argument("-order", type=str, help="Order in which data has to be written - TF/FT\

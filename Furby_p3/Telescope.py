@@ -20,10 +20,22 @@ class Telescope(object):
         tsamp : float
             Sampling time of the instrument (in sec)
          '''
+
+        assert isinstance(name, str) and isinstance(nch, int) and \
+            (isinstance(fbottom, float) or isinstance(fbottom, int)) and \
+            (isinstance(ftop, float) or isinstance(ftop, int)) and \
+            (isinstance(tsamp, float) or isinstance(tsamp, int)),\
+            "Incorrect dtype provided for one of the telescope params"
+
+        assert ftop > fbottom, "ftop is <= fbottom!"
+
+        assert ftop > 0 and fbottom > 0 and nch > 0 and tsamp > 0, \
+            "Telescope params are negative/zero valued"
+
         self.name = name
         self.ftop = ftop
         self.fbottom = fbottom
-        self.fcenter = (ftop + fbottom) /2
+        self.fcenter = (ftop + fbottom) /2.
         self.nch = nch
         self.tsamp = tsamp
         self._set_bw()

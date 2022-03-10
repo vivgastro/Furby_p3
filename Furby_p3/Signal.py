@@ -1,4 +1,3 @@
-from multiprocessing.sharedctypes import Value
 import numpy as N
 from Furby_p3.utility import gauss2, gauss, pad_along_axis
 from Furby_p3.Telescope import Telescope
@@ -21,7 +20,7 @@ class Pulse(object):
     requested parameters.
     '''
 
-    def __init__(self, tel_obj, tfactor, scattering_index, tot_nsamps = None):
+    def __init__(self, tel_obj, tfactor = 10, tot_nsamps = None, subsample_phase = 0.5):
         '''
         Parameters
         ----------
@@ -32,28 +31,37 @@ class Pulse(object):
             representation of the pulse with requested parameters,
             specially in those cases where the requested width is of
             the order ~1 sample. 10 is usuallt a good number. 
-        scattering_index : float
-            The scattering index to be used when scattering the frb.
-            Scattering from a medium exhibiting Kolmogorov turbulence
-            results in an index of -4.4.
         tot_nsamps : int, optional
             Total number of samples desired in the output mock frb
             template. If this option is None or left unspecified, then
             it is automatically calculated based on the requested DM in
             the disperse() function.
             '''
-        self.scattering_index = scattering_index
         self.tfactor = tfactor
         self.tel = tel_obj
         self.tot_nsamps = tot_nsamps
+        self._set_sub_sample_phase(subsample_phase)
+
+    def _set_sub_sample_phase(self, subsample_phase):
+        if 0<=subsample_phase<=1:
+            valid_options = N.linspace(0, 1, self.tfactor+1, endpoint=True)
+            closest_idx = N.argmin(N.abs(valid_options - subsample_phase))
+            closest_option = valid_options[closest_idx]
+            self.subsample_phase = closest_option
+            if self.subsample_phase == 1.0:
+                self.subsample_phase = 0.0
+        else:
+            ValueError("Invalid value of subsample_phase: {0}".format(subsample_phase))
         
 
-    def _set_tot_nsamps(self, dm, buffer = 100):
-        max_dm_sweep = self.dm_smear_delay(dm, self.tel.fcenter, self.tel.tsamp, chw=self.tel.bw)
-        self.tot_nsamps = int(int( (max_dm_sweep + 2*buffer) / 100  + 1) * 100)        #Rounding up to the nearest 100 samps
+    def _set_tot_nsamps(self, delays_in_samples, buffer = 100, tfactor = 1):
+        max_delay_right = delays_in_samples.max()
+        self.tot_nsamps = (2 * (max_delay_right + buffer) //100 + 2 ) * 100 // tfactor
+        #max_dm_sweep = self.dm_smear_delay(dm, self.tel.fcenter, self.tel.tsamp, chw=self.tel.bw)
+        #self.tot_nsamps = int(int( (max_dm_sweep + 2*buffer) / 100  + 1) * 100)        #Rounding up to the nearest 100 samps
 
 
-    def get_pure_frb(self, width):
+    def get_pure_frb(self, width, shape='gaussian'):
         '''
         Creates a simple Gaussian FRB profile with frequency and time axis
         
@@ -61,6 +69,11 @@ class Pulse(object):
         ----------
         width : float
             Width expected (in seconds)
+            box-car width incase shape is tophat
+            FWHM width incase shape is gaussian
+        shape : str
+            Shape of the desired pulse
+            Options - ['tophat', 'gaussian']
 
         Returns
         -------
@@ -68,13 +81,21 @@ class Pulse(object):
             A 2-D numpy array with freq and time axis containing the
             Gaussian FRB profile.
         '''
+
         width_samps = width / self.tel.tsamp
         width_samps = width_samps * self.tfactor
-        self._nsamps_for_gaussian = 2*int(max([self.tfactor, 5 * width_samps]))
-        x = N.arange(self._nsamps_for_gaussian)
+        self._nsamps_for_pure_frb = 2 * int(max([self.tfactor, 5 * width_samps/2])) + 1
 
-        pure_frb_single_channel = gauss2(
-            x, 1.0, int(len(x)/2), width_samps)
+
+        if shape.lower() == 'gaussian':
+            x = N.arange(self._nsamps_for_pure_frb)
+            pure_frb_single_channel = gauss2(
+                x, a=1.0, x0=int(len(x)/2), FWHM=width_samps)
+        elif shape.lower() == 'tophat':
+            tophat_width_samps = max([1, int(width_samps)])
+            pure_frb_single_channel = pad_along_axis(N.ones(tophat_width_samps), self._nsamps_for_pure_frb)
+        else:
+            raise ValueError("Requested pulse shape : {0} is not supported yet".format(shape))
 
         # Copying single channel nch times as a 2D array
         pure_frb = N.array([pure_frb_single_channel] * self.tel.nch)
@@ -186,7 +207,7 @@ class Pulse(object):
         frb = frb * f.reshape(-1, 1)
         return frb
 
-    def scatter(self, frb, tau0):
+    def scatter(self, frb, tau0, scattering_index = 4.4):
         '''
         Scatters the frb profile
 
@@ -208,6 +229,9 @@ class Pulse(object):
         tau0 : float
             The value of the decay timescale of the exponential kernel
             at the frequency of the highest channel in sec.
+        scattering_index : float
+            The value of the power-law index to scale the tau0 in each
+            channel with. For Kolmogorov like spectrum the value is 4.4
 
         Returns
         -------
@@ -217,15 +241,15 @@ class Pulse(object):
         '''
         f_ch = self.tel.f_ch
         tau0_samps = int(tau0/self.tel.tsamp) * self.tfactor
-        nsamps = int( 6 * tau0_samps * ((self.tel.ftop + self.tel.fbottom)/2 / self.tel.fbottom)**self.scattering_index )
+        nsamps = int( 6 * tau0_samps * ((self.tel.ftop + self.tel.fbottom)/2 / self.tel.fbottom)**scattering_index )
         nsamps = max([self.tfactor, nsamps])
         self._nsamps_for_exponential = nsamps
 
         if tau0_samps == 0:
             return frb
 
-        k = tau0_samps * (f_ch[0])**self.scattering_index  # proportionality constant
-        taus = k / f_ch**self.scattering_index  # Calculating tau for each channel
+        k = tau0_samps * (f_ch[0])**scattering_index  # proportionality constant
+        taus = k / f_ch**scattering_index  # Calculating tau for each channel
         exps = []
         scattered_frb = []
 
@@ -300,7 +324,22 @@ class Pulse(object):
         return dmsmeared_data / dms_width_samps
 
 
-    def disperse(self, frb, dm):
+    def find_subsample_offset(self, undispersed_time_series):
+        '''
+        Finds the offset required to acheive the requested 
+        subsample_phase
+        '''
+        nsamps_hires = undispersed_time_series.shape[0]
+        mean_pos_of_pulse = int(N.round(N.sum(N.arange(nsamps_hires) * undispersed_time_series) / N.sum(undispersed_time_series)))
+        
+        current_subsample_offset = mean_pos_of_pulse % self.tfactor
+        desired_subsample_offset = int(self.subsample_phase * self.tfactor)
+
+        return desired_subsample_offset - current_subsample_offset
+        
+
+
+    def disperse(self, frb, dm, dmsmear = True):
         '''
         Disperses the signal at a given DM. Also applied dm-smearing to
         individual channels
@@ -319,6 +358,8 @@ class Pulse(object):
         dm : float
             DM at which the data needs to be dispersed (in pc/cc)
             
+        dmsmear : bool
+            Whether to enable dmsmearing or not. Def = True
         Returns
         -------
         dispersed_frb : numpy.ndarray
@@ -344,29 +385,38 @@ class Pulse(object):
         #nsamps = delays_in_samples[-1] - delays_in_samples[0] + 2*frb.shape[1]
         #nsamps = delays_in_samples[-1]*2 + 2*frb.shape[1]
         
+        current_nsamps = frb.shape[1]
+        dm_smear_max = self.dm_smear_delay(dm, f_ch[-1], tres)
+        dm_smear_max_nsamps = current_nsamps + dm_smear_max
         if self.tot_nsamps is None:
-            self._set_tot_nsamps(dm, buffer = frb.shape[1]//self.tfactor)
+            self._set_tot_nsamps(delays_in_samples, buffer = dm_smear_max_nsamps, tfactor=self.tfactor)
+    
         nsamps = self.tot_nsamps * self.tfactor
-        pre_shift = self._nsamps_for_gaussian // 2
+        pre_shift = self._nsamps_for_pure_frb // 2
         start = int(nsamps/2) - pre_shift
         #end = start + frb.shape[1]
-        dm_smear_max = self.dm_smear_delay(dm, f_ch[-1], tres)
-        dm_smear_max_nsamps = frb[1].shape[0] + dm_smear_max
-
-        print(f"frb.shape = {frb.shape}, dm_smear_max = {dm_smear_max}")
+        #print(f"frb.shape = {frb.shape}, dm_smear_max = {dm_smear_max}, dm_smear_max_nsamps = {dm_smear_max_nsamps}")
 
         end = start + dm_smear_max_nsamps
 
         dispersed_frb = N.zeros(nch * nsamps).reshape(nch, nsamps)
-        undispersed_time_series = N.zeros(dm_smear_max_nsamps)
+        undispersed_time_series = N.zeros(nsamps)
 
         for i in range(nch):
             delay = delays_in_samples[i]
             if (end + delay > nsamps) or (start + delay < 0):
                 raise RuntimeError("nsamps (={nsamps}) is too small to accomodate an FRB with DM = {dm}. Values: start = {start}, end={end}, delay={delay}".format(nsamps=self.tot_nsamps, dm=dm, start=start, end=end, delay=delay))
-            dmsmeared_channel = self.dm_smear_channel(frb[i], dm, cfreq = f_ch[i], tres=tres)
+            if dmsmear:
+                dmsmeared_channel = self.dm_smear_channel(frb[i], dm, cfreq = f_ch[i], tres=tres)
+            else:
+                dmsmeared_channel = frb[i]
+
             padded_chan = pad_along_axis(dmsmeared_channel, dm_smear_max_nsamps, axis=0)
             dispersed_frb[i, start+delay : end+delay] += padded_chan
-            undispersed_time_series += padded_chan
+            undispersed_time_series[start : end] += padded_chan
+        
+        required_subsample_offset = self.find_subsample_offset(undispersed_time_series)
+        dispersed_frb = N.roll(dispersed_frb, required_subsample_offset, axis=1)
+        undispersed_time_series = N.roll(undispersed_time_series, required_subsample_offset)
 
         return dispersed_frb, undispersed_time_series

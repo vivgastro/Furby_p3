@@ -65,15 +65,15 @@ class Furby_reader:
 	    
     def dedisperse(self, data, dm = None):
         if not dm:
-            dm = self.header.DM
-        chw = self.header.BW / self.header.NCHAN
+            dm = self.header.DM_PC_CC
+        chw = self.header.BW_MHZ / self.header.NCHAN
         foff = chw / 2.
-        if self.header.BW>0:
-            f0 = self.header.FBOTTOM
-        if self.header.BW<0:
-            f0 = self.header.FTOP
+        if self.header.BW_MHZ>0:
+            f0 = self.header.FBOTTOM_MHZ
+        if self.header.BW_MHZ<0:
+            f0 = self.header.FTOP_MHZ
         
-        tsamp = self.header.TSAMP / 1e6			#Dada header has to have tsamp in usec
+        tsamp = self.header.TSAMP_US / 1e6			#Dada header has to have tsamp in usec
         
         fch = (f0 + foff) + N.arange(self.header.NCHAN) * chw	#(f0 + foff) becomes the centre frequency of the first channel
         delays = dm * 4.14881e3 * ( fch**-2 - (f0+foff)**-2 )	#in seconds

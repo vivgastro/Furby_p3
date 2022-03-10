@@ -1,5 +1,5 @@
 
-def make_psrdada_header_string(params):
+def format_psrdada_header_string(params):
     '''
     Converts a dictionary into a psrdada format header string
 
@@ -25,7 +25,7 @@ def make_psrdada_header_string(params):
     return header
 
 
-def make_psrdada_header(telescope, nsamps, order, ID, furby_name, matched_filter_snr, FWHM, top_hat_width, dm, tau0, noise_per_sample):
+def make_psrdada_header(furby_header, order, ID, furby_name):
     '''
     Creates a header string that is compatible with the psrdada format
     
@@ -34,27 +34,18 @@ def make_psrdada_header(telescope, nsamps, order, ID, furby_name, matched_filter
     
     Params
     ------
-    telescope : dict
-        A dict containing the telescope parameters
-    pulse : object
-        An instance of the Pulse() class which contains the relevant
-        information about the simulated furby
+    furby_header : dict
+        A dictionary containing the params like SNR, DM etc for the frb
+    
+    order : str
+        A sting indicating the order in which the data has to be saved
+        on disk. Options : [TF, FT]
+
     ID : str
-        ID of the furby
+        The ID associated with this furby
+    
     furby_name : str
-        Name of the furby file
-    matched_filter_snr : float
-        Matched filter SNR of the furby
-    FWHM : float
-        FWHM of the furby (in seconds)
-    top_hat_width : float
-        Top hat width of the furby (in seconds)
-    dm : float
-        DM of the furby (in pc/cc)
-    tau0 : float
-        Scattering timescale tau0 of the furby (in seconds)
-    noise_per_sample : float
-        Noise_per_sample of the data onto which this furby would be added
+        The filename to which this furby has to be saved
 
     Returns
     -------
@@ -63,32 +54,17 @@ def make_psrdada_header(telescope, nsamps, order, ID, furby_name, matched_filter
         psrdada format
     '''
 
-    header_params = {
+    dada_header_params = {
         "HDR_VERSION": 1.0,
         "HDR_SIZE": 16384,
-        "TELESCOPE": telescope["name"],
         "ID": ID,
         "SOURCE": furby_name,
-        "FREQ": (telescope["ftop"] + telescope["fbottom"])/2.,
-        "BW":   -1 * (telescope["ftop"] - telescope["fbottom"]),
-        "NPOL": 1,
-        "NBIT": 32,
-        "NCHAN": telescope["nch"],
-        "TSAMP": telescope["tsamp"] * 1e6,      #DADA header has tsamp in micro-seconds
-        "NSAMPS": nsamps,
         "UTC_START": "2022-01-01-00:00:00",
         "STATE": "Intensity",
         "OBS_OFFSET": 0,
         "ORDER": order,
-        "FTOP": telescope["ftop"],
-        "FBOTTOM": telescope["fbottom"],
         "INSTRUMENT": "FAKE",
-        "SNR": matched_filter_snr,
-        "FWHM": FWHM * 1e3,  # ms
-        "WIDTH": top_hat_width * 1e3,  # ms
-        "DM": dm,
-        "TAU0": tau0 * 1e3,  # ms
-        "NOISE_PER_SAMPLE" : noise_per_sample
     }
-    hdr_string = make_psrdada_header_string(header_params)
+    full_header = {**dada_header_params, **furby_header}
+    hdr_string = format_psrdada_header_string(full_header)
     return hdr_string

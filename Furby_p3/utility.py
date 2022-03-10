@@ -1,6 +1,7 @@
 import numpy as N
 import os, sys
 from scipy import signal
+import matplotlib.pyplot as plt
 
 def tscrunch(data, tx, avg = False):
     '''
@@ -280,12 +281,15 @@ def get_boxcar_width_and_snr(frb_tseries, tseries_noise):
     min_boxcar = 1
     max_boxcar = n_samps_above_zero 
     maxima = []
-    for boxcar in range(min_boxcar, max_boxcar + 1, 1):
+    boxcars = N.arange(min_boxcar, max_boxcar+1 , 1).astype(int)
+    for boxcar in boxcars:
         convolved_tseries = signal.fftconvolve(frb_tseries, N.ones(boxcar), mode='valid') / N.sqrt(boxcar)
         maxima.append( convolved_tseries.max() )
+
     best_boxcar_idx = N.argmax(maxima)
+    best_boxcar = min_boxcar + best_boxcar_idx
     best_boxcar_snr = maxima[best_boxcar_idx] / tseries_noise
-    return best_boxcar_idx + min_boxcar, best_boxcar_snr
+    return best_boxcar, best_boxcar_snr
 
 
 
