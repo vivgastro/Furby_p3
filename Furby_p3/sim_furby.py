@@ -56,7 +56,7 @@ def parse_spectrum_argument(spectrum):
 
 
 def get_furby(dm, snr, width, tau0, telescope_params, spectrum_type, shape='gaussian',
-            subsample_phase = 0.5, noise_per_sample=1, tfactor=10, tot_nsamps=None, 
+            subsample_phase = 0.5, dmsmear = True, noise_per_sample=1, tfactor=10, tot_nsamps=None, 
             scattering_index = 4.4):
     '''
     Generates a noise-free mock FRB template based on the given params
@@ -86,6 +86,8 @@ def get_furby(dm, snr, width, tau0, telescope_params, spectrum_type, shape='gaus
     shape : str 
         The shape of the intrinsic pulse profile
         Options - ['gaussian', 'tophat'], def='gaussian'
+    dmsmear : bool
+        Whether to enable dmsmearing or not. Def = True
     subsample_phase : float
         Subsample offset for the pulse (between 0 and 1). Def =0.5
     noise_per_sample : float, optional
@@ -130,7 +132,7 @@ def get_furby(dm, snr, width, tau0, telescope_params, spectrum_type, shape='gaus
     frb_hires = pulse.create_freq_structure(frb_hires, spectrum_type)
     frb_hires = pulse.scatter(frb_hires, tau0, scattering_index)
     frb_hires, undispersed_time_series_hires = pulse.disperse(
-        frb_hires, dm)
+        frb_hires, dm, dmsmear)
 
     frb = tscrunch(frb_hires, tfactor)
     undispersed_time_series = tscrunch(
@@ -165,6 +167,7 @@ def get_furby(dm, snr, width, tau0, telescope_params, spectrum_type, shape='gaus
         'TOP_HAT_WIDTH_MS' : top_hat_width * 1e3, #ms
         'FWHM_MS' : FWHM * 1e3,       #ms
         'SCATTERING_INDEX' : scattering_index,
+        'DMSMEARED' : dmsmear,
         'SUBSAMPLE_PHASE' : pulse.subsample_phase,
         'NOISE_PER_SAMPLE' : noise_per_sample,
         'TELESCOPE' : telescope.name,

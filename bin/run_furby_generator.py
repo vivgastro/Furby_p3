@@ -40,6 +40,15 @@ def start_logging(ctl, db_d, args):
         logger.write("#FURBY_ID\tDM(pc/cc)\tFWHM(ms)\tTAU0(ms)\tSNR\n")
     return logger
 
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 
 def read_params_file(pfile):
     '''
@@ -179,6 +188,7 @@ def main(args):
             telescope_params = P,
             spectrum_type=args.spectrum, shape=args.shape, 
             subsample_phase=args.subsample_phase,
+            dmsmear=args.dmsmear,
             noise_per_sample=args.noise_per_sample,
             tfactor = args.tfactor, tot_nsamps=args.tot_nsamps,
             scattering_index=args.scattering_index)
@@ -226,6 +236,8 @@ if __name__ == "__main__":
         Options - ['gaussian', 'tophat']. Def = 'gaussian'", default='gaussian')
     a.add_argument("-subsample_phase", type=float, help="Phase of the pulse within a sample\
         Def = 0.5.", default=0.5)
+    a.add_argument("-dmsmear", type=str2bool, help="Enable dm-smearing (True/False). \
+        Def = True", default=True)
     a.add_argument("-D", type=str, help="Path to the database directory (existing or new).\
          Default=cwd", default="./")
     a.add_argument("-order", type=str, help="Order in which data has to be written - TF/FT\
@@ -241,5 +253,4 @@ if __name__ == "__main__":
                         for auto-calculation", default=None)
 
     args = a.parse_args()
-
     main(args)
