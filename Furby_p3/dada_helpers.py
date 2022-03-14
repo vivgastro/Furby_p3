@@ -25,7 +25,7 @@ def format_psrdada_header_string(params):
     return header
 
 
-def make_psrdada_header(furby_header, order, ID, furby_name):
+def make_psrdada_header(furby_header, order, ID, furby_name, extra_params = {}):
     '''
     Creates a header string that is compatible with the psrdada format
     
@@ -47,6 +47,9 @@ def make_psrdada_header(furby_header, order, ID, furby_name):
     furby_name : str
         The filename to which this furby has to be saved
 
+    extra_params : dict
+        Any extra params you may want to include in the header
+
     Returns
     -------
     hdr_string : str
@@ -65,6 +68,6 @@ def make_psrdada_header(furby_header, order, ID, furby_name):
         "ORDER": order,
         "INSTRUMENT": "FAKE",
     }
-    full_header = {**dada_header_params, **furby_header}
+    full_header = {**dada_header_params, **furby_header, **extra_params}
     hdr_string = format_psrdada_header_string(full_header)
     return hdr_string
