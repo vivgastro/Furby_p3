@@ -36,7 +36,7 @@ def start_logging(ctl, db_d, args):
                 logger.write("#"+furby+"\n")
         logger.write("\n")
         logger.write(
-            "#The arguments that were passed to create this catalog are:{0}".format(args))
+            "#The arguments that were passed to create this catalog are:\n{0}\n\n".format(args))
         logger.write("#FURBY_ID\tDM(pc/cc)\tFWHM(ms)\tTAU0(ms)\tSNR\n")
     return logger
 
