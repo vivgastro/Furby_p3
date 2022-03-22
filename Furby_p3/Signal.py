@@ -320,7 +320,7 @@ class Pulse(object):
         dms_width_samps = self.dm_smear_delay(dm, cfreq, tres)
         dms_kernel = N.ones(dms_width_samps)
 
-        dmsmeared_data = signal.fftconvolve(d_ch, dms_kernel, mode='full')
+        dmsmeared_data = N.convolve(d_ch, dms_kernel, mode='full')
         return dmsmeared_data / dms_width_samps
 
 
