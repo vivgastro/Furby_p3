@@ -189,7 +189,7 @@ class Pulse(object):
                 width_of_blob = N.abs(N.random.normal(
                     loc=20 / n_blobs, scale=10, size=1))
                 # We want roughly 10 +- 5 MHz blobs. 10 MHz = 10/chw chans = 10./((P.ftop - P.bottom)/nch) chans
-                NCHAN_PER_MHz = N.abs(1./((self.tel.ftop-self.tel.fbottom)/nch))
+                NCHAN_PER_MHz = N.abs(1./((self.tel.ftop-self.tel.fbottom)/nch)) * 1e6
                 width_of_blob = N.random.normal(
                     loc=width_of_blob*NCHAN_PER_MHz, scale=NCHAN_PER_MHz, size=1)
                 # For just one blob (n_blobs=1), this does not matter because we rescale the maxima to 1 evetually. For more than one blobs, this random amp will set the relative power in different blobs. So, the power in weakest blob can be as low as 1/3rd of the strongest blob)
