@@ -181,7 +181,7 @@ class Pulse(object):
             f_ch = self.tel.f_ch
             f = f_ch**pli
         elif kind == 'patchy':
-            n_blobs = int(N.abs(N.random.normal(loc=self.tel.bw / 50, scale=3)))
+            #n_blobs = int(N.abs(N.random.normal(loc=self.tel.bw / 50, scale=3)))
             n_blobs = int(N.floor(N.random.exponential(scale=5, size=1))) + 1
             f = N.zeros(nch)
             for i in range(n_blobs):
