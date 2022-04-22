@@ -25,7 +25,9 @@ class Telescope(object):
             (isinstance(fbottom, float) or isinstance(fbottom, int)) and \
             (isinstance(ftop, float) or isinstance(ftop, int)) and \
             (isinstance(tsamp, float) or isinstance(tsamp, int)),\
-            "Incorrect dtype provided for one of the telescope params"
+            f"Incorrect dtype provided for one of the telescope params:\
+             name:str-{type(name)}, nch:int-{type(nch)}, fbottom:float-{type(fbottom)}\
+             ftop:float-{type(ftop)}, tsamp:float-{type(tsamp)}"
 
         assert ftop > fbottom, "ftop is <= fbottom!"
 
