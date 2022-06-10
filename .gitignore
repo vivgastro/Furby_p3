@@ -4,3 +4,5 @@ params.yml
 Furby_p3.egg-info
 *.swp
 temp_database
+*/uv_data.*.txt
+*uv_data.*.txt
