@@ -43,6 +43,7 @@ class Pulse(object):
         self._set_sub_sample_phase(subsample_phase)
 
     def _set_sub_sample_phase(self, subsample_phase):
+        print("Setting sub-sample phase as :", subsample_phase)
         if 0<=subsample_phase<=1:
             valid_options = N.linspace(0, 1, self.tfactor+1, endpoint=True)
             closest_idx = N.argmin(N.abs(valid_options - subsample_phase))
@@ -381,6 +382,7 @@ class Pulse(object):
         delays = D * f_ch**(-2) * dm    *1e-3  #Only works if freq in MHz and D in ms. Output delays in ms, multiply by 1e-3 to conver to 's'
         delays -= delays[int(nch/2)]
         delays_in_samples = N.rint(delays / tres).astype('int') #here we will have slight approximations due to quantization, but at 10.24 usec resolution they should be minimal
+        #print(f"dm = {dm}, delays[0] = {delays[0]}, delays[-1] = {delays[-1]}, tfactor={self.tfactor}, delays_in_samps = {delays_in_samples}")
 
         #nsamps = delays_in_samples[-1] - delays_in_samples[0] + 2*frb.shape[1]
         #nsamps = delays_in_samples[-1]*2 + 2*frb.shape[1]
@@ -415,7 +417,8 @@ class Pulse(object):
             dispersed_frb[i, start+delay : end+delay] += padded_chan
             undispersed_time_series[start : end] += padded_chan
         
-        required_subsample_offset = self.find_subsample_offset(undispersed_time_series)
+        #required_subsample_offset = self.find_subsample_offset(undispersed_time_series)
+        required_subsample_offset = self.find_subsample_offset(dispersed_frb[-1])
         dispersed_frb = N.roll(dispersed_frb, required_subsample_offset, axis=1)
         undispersed_time_series = N.roll(undispersed_time_series, required_subsample_offset)
 
