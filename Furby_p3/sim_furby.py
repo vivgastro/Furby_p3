@@ -3,6 +3,7 @@ from Furby_p3.Signal import Pulse, SUPPORTED_FREQ_STRUCTURES
 from Furby_p3.Telescope import Telescope
 from Furby_p3.utility import tscrunch, get_matched_filter_snr, get_boxcar_width_and_snr, get_FWHM
 import os
+import matplotlib.pyplot as plt
 
 def parse_spectrum_argument(spectrum):
     '''
@@ -56,7 +57,7 @@ def parse_spectrum_argument(spectrum):
 
 
 def get_furby(dm, snr, width, tau0, telescope_params, spectrum_type, shape='gaussian',
-            subsample_phase = 0.5, dmsmear = True, noise_per_sample=1, tfactor=10, tot_nsamps=None, 
+            subsample_phase = 0.5, dmsmear = True, noise_per_sample=1, tfactor=100, tot_nsamps=None, 
             scattering_index = 4.4):
     '''
     Generates a noise-free mock FRB template based on the given params
@@ -148,12 +149,17 @@ def get_furby(dm, snr, width, tau0, telescope_params, spectrum_type, shape='gaus
     noise_after_averaging_channels = noise_per_sample * np.sqrt(telescope.nch)
     boxcar_width, boxcar_snr = get_boxcar_width_and_snr(undispersed_time_series, noise_after_averaging_channels)
 
-    normalizing_factor = snr / boxcar_snr
+    normalizing_factor = snr / np.sum(frb) * 16
+    #normalizing_factor = snr / boxcar_snr
     frb *= normalizing_factor
     final_frb = frb.astype('float32')
 
     mf_snr = get_matched_filter_snr(undispersed_time_series * normalizing_factor, noise_after_averaging_channels)
     final_boxcar_width, final_boxcar_snr = get_boxcar_width_and_snr(undispersed_time_series * normalizing_factor, noise_after_averaging_channels)
+
+    #plt.figure()
+    #plt.plot(undispersed_time_series * normalizing_factor)
+    #plt.show(block=False)
 
     frb_header_params = {
         'DM_PC_CC' : dm,
