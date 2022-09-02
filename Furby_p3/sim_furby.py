@@ -149,7 +149,7 @@ def get_furby(dm, snr, width, tau0, telescope_params, spectrum_type, shape='gaus
     noise_after_averaging_channels = noise_per_sample * np.sqrt(telescope.nch)
     boxcar_width, boxcar_snr = get_boxcar_width_and_snr(undispersed_time_series, noise_after_averaging_channels)
 
-    normalizing_factor = snr / np.sum(frb) * 16
+    normalizing_factor = snr / np.sum(frb) * np.sqrt(frb.shape[0])
     #normalizing_factor = snr / boxcar_snr
     frb *= normalizing_factor
     final_frb = frb.astype('float32')
