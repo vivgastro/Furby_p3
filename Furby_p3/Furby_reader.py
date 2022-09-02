@@ -103,3 +103,55 @@ class Furby_reader:
                 else:
                     return val
 
+
+class RawDedisp:
+    def dedisperse(data, DM, BW, Fcenter, Tsamp):
+        '''
+        De-disperses the freq-time data at a given DM
+
+        Input
+        -----
+        data: numpy.ndarray
+            A 2-dimensional numpy array containing freq-time data;
+            Freq along the Y-axis / 0th axis, Highest freq channel
+            should be the first channel, i.e. freq decreases with 
+            channel number;
+            Time along the X-axis / 1st axis
+        DM: float
+            Dispersion Measure in pc/cm^3
+        
+        BW: float
+            Bandwidth in MHz
+        
+        Fcenter: float
+            Frequency of the center of the band in MHz
+
+        Tsamp: float
+            Sampling resolution of the data in seconds
+        
+        Output
+        ------
+        ddata: numpy.ndarray
+            De-dispersed data as a 2-D numpy array
+        '''
+        nchan = data.shape[0]
+        nt = data.shape[1]
+
+        Ftop = Fcenter + BW/2
+        Fbottom = Fcenter - BW/2
+        chan_width = BW / nchan
+        
+        Freq_bottom_chan = Fbottom + chan_width / 2
+
+        Freqs = Freq_bottom_chan + np.arange(nchan) * chan_width
+        Freqs = Freqs[::-1]     #Flipping the freq axis to match the data orientation
+        delays = DM * 4.14881e3 * ( Freqs**-2 )	#in seconds
+        delays -= delays[0]        #Setting the delay of the first channel to be zero
+
+        delays_in_samples = np.rint(delays / Tsamp).astype('int')
+        
+        ddata = []
+        for i, row in enumerate(data):
+            d_data.append(np.roll(row, -1*delays_in_samples[i]))
+        ddata = N.array(ddata)
+        return ddata	
