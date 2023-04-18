@@ -135,23 +135,19 @@ class RawDedisp:
             De-dispersed data as a 2-D numpy array
         '''
         nchan = data.shape[0]
-        nt = data.shape[1]
-
-        Ftop = Fcenter + BW/2
         Fbottom = Fcenter - BW/2
         chan_width = BW / nchan
-        
         Freq_bottom_chan = Fbottom + chan_width / 2
 
         Freqs = Freq_bottom_chan + np.arange(nchan) * chan_width
         Freqs = Freqs[::-1]     #Flipping the freq axis to match the data orientation
-        delays = DM * 4.14881e3 * ( Freqs**-2 )	#in seconds
+        delays = DM * 4.14881e3 * ( Freqs**-2 )	#in seconds, from PSR handbook
         delays -= delays[0]        #Setting the delay of the first channel to be zero
 
         delays_in_samples = np.rint(delays / Tsamp).astype('int')
         
         ddata = []
         for i, row in enumerate(data):
-            d_data.append(np.roll(row, -1*delays_in_samples[i]))
-        ddata = N.array(ddata)
+            ddata.append(np.roll(row, -1*delays_in_samples[i]))
+        ddata = np.array(ddata)
         return ddata	

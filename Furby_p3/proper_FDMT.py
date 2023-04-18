@@ -33,8 +33,8 @@ def FDMT_initialize(din, f_min, f_max, maxDT):
 
         #samp_starts = int(np.floor(start_delays + ssp))
         #samp_ends = int(np.ceil(end_delays + ssp))
-        
-        dout[:, i_dm, i_dm:] = din[:, -i_dm] + dout[:, i_dm -1, i_dm:]
+
+        dout[:, i_dm, i_dm:] = din[:, :-i_dm] + dout[:, i_dm -1, i_dm:]
 
     return dout
 
